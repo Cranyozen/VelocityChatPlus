@@ -91,7 +91,7 @@ public class VelocityChat {
         channelManager.load(configManager);
 
         // ── Initialize custom TabList ──
-        tabListManager = new TabListManager(this, server, configManager, logger);
+        tabListManager = new TabListManager(this, server, configManager, groupManager, logger);
         tabListManager.start();
 
         // ── Register commands ──
@@ -106,7 +106,6 @@ public class VelocityChat {
                 channelCommand, logger));
 
         logger.info("VelocityChat v2.2.0 enabled");
-        logger.info("Author: YuHongChen(LiquidTeam) QQ:1464670605");
     }
 
     /**

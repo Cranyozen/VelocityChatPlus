@@ -101,12 +101,27 @@ route-chat: true
 # ── 自定义 TabList / Custom TabList ────────────────────────
 # 禁用时使用每个后端服务器自带的 TabList
 # When disabled, each backend server's own TabList is used
+# 说明：条目采用"原位更新"而非整表清空重建，因此 Carpet 模组的假人(bot)
+#       在 Tab 中会被保留，不会被刷新清掉。
+# Note: entries are updated in place (not cleared+rebuilt), so Carpet fake
+#       players (bots) stay visible instead of being wiped on each refresh.
 tablist:
   enabled: true
   # 顶部标题 / Header ({online} = 在线人数)
   header: "&6&lVelocityChat\n&7在线人数: &a{online}"
   # 底部说明 / Footer
   footer: "&7Footer"
+  # 每个条目的显示格式 / Per-entry display format
+  # 占位符 / Placeholders:
+  #   {server} - 服务器显示名 / server display name (from server-aliases)
+  #   {player} - 玩家名 / the player's username (or the bot's name for fake players)
+  #   {title}  - 群组称号 / the player's group title (empty if none)
+  #   {group}  - 群组名 / the player's group name (empty if none)
+  entry-format: "{server}§8 | &r{title}{player}"
+  # 假人的单独显示格式 / Format for Carpet fake players (bots) only.
+  # 留空则与 entry-format 相同 / Leave empty to share entry-format.
+  # 所有占位符同上 / Same placeholders as above.
+  bot-format: "{server}§8 | &7&o[假人]&r{title}{player}"
 
 # ── 群组称号配置 / Group Titles ────────────────────────────
 # 群组系统允许给特定玩家设置称号（显示在跨服广播的玩家名前）

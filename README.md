@@ -24,7 +24,7 @@ Chat together across your entire server network. Install **only on the Velocity 
 - **Server aliases** — show friendly names like "登录服" instead of raw server IDs, configured directly in `config.yml` (`serverId: "&aDisplayName"`)
 - **Group titles** — create groups and assign title prefixes shown before player names in chat
 - **Chat channels** — partitioned (分区) cross-server chat: players join a channel with `/ch` and only members of the same channel see each other's messages; channels can be permission-gated and one is the default
-- **Custom TabList** — override header, footer and player entries across the network (configured in the `tablist:` section)
+- **Custom TabList** — override header, footer and player entries across the network (configured in the `tablist:` section); entries are updated in place so backend-injected entries like Carpet fake players (bots) stay visible; each entry's display text is customizable via `entry-format` with `{player}`/`{server}`/`{title}`/`{group}` placeholders, and Carpet fake players get their own `bot-format` template
 - **Granular permissions** — `velocitychat.admin.*` sub-nodes, works with LuckPerms (optional dependency)
 - **Broadcast cooldown** — optional anti-spam cooldown, admins can bypass
 - **Message visibility** — join/switch/leave alerts can be shown to everyone, admins only, or disabled
@@ -116,7 +116,7 @@ Key settings (all commented in the generated file):
 | `channels-enabled` | `true` | Enable the channel (分区) chat feature |
 | `route-chat` | `true` | Intercept normal chat and route it to the player's active channel |
 | `channels` | — | Preset channels seeded into `channels.yml` on first startup |
-| `tablist` | disabled | Custom TabList: `enabled`, `header`, `footer` (supports `{online}` placeholder) |
+| `tablist` | disabled | Custom TabList: `enabled`, `header`, `footer` (supports `{online}` placeholder), `entry-format` (per-entry text with `{player}`/`{server}`/`{title}`/`{group}` placeholders) and `bot-format` (separate template for Carpet fake players); entries update in place so Carpet bots stay visible |
 | `groups` | — | Preset groups generated on first startup |
 | `messages` | — | Override individual language-file messages (takes priority) |
 

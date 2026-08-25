@@ -465,6 +465,38 @@ public class ConfigManager {
         return "&7在线 &a{online} &r&7人";
     }
 
+    /**
+     * Get the per-entry display format for the TabList.
+     * <p>
+     * Placeholders:
+     * <ul>
+     *   <li>{server} - the server's display name (from server-aliases)</li>
+     *   <li>{player} - the player's username (or the bot's name for fake players)</li>
+     *   <li>{title}  - the player's group title, empty if they have none</li>
+     *   <li>{group}  - the player's group name, empty if they have none</li>
+     * </ul>
+     */
+    public String getTabListEntryFormat() {
+        if (config != null && config.get("tablist") instanceof Map<?, ?> tab) {
+            Object f = tab.get("entry-format");
+            if (f != null && !f.toString().isBlank()) return f.toString();
+        }
+        return "{server}§8▏ &r{title}{player}";
+    }
+
+    /**
+     * Get the per-entry display format for backend-injected fake entries such as
+     * Carpet bots. Defaults to {@link #getTabListEntryFormat()} so it can be left
+     * empty to share the same template as real players.
+     */
+    public String getTabListBotFormat() {
+        if (config != null && config.get("tablist") instanceof Map<?, ?> tab) {
+            Object f = tab.get("bot-format");
+            if (f != null && !f.toString().isBlank()) return f.toString();
+        }
+        return getTabListEntryFormat();
+    }
+
     // ── Internal Helpers ─────────────────────────────────────
 
     private boolean getBoolean(String key, boolean def) {
