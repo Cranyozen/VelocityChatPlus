@@ -40,10 +40,8 @@ public class ChatRouter {
         var channelOpt = channels.getPlayerChannel(player);
         if (channelOpt.isEmpty()) return;
 
-        // Intercept: don't let the raw message reach the backend server, since
-        // we broadcast it to the channel ourselves.
-        event.setResult(PlayerChatEvent.ChatResult.denied());
-
+        // Broadcast to the cross-server channel. Do NOT deny the event — let the
+        // message also reach the backend server so its console / logs show the chat.
         channelCommand.sendToChannel(player, message);
     }
 

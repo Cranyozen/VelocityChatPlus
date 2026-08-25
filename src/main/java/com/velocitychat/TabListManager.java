@@ -59,6 +59,7 @@ public class TabListManager {
      * Apply the custom TabList immediately for all online players.
      */
     public void refresh() {
+        boolean manage = config.isTabListManageHeaderFooter();
         if (!config.isTabListEnabled()) {
             // Feature turned off: make sure no stale custom header/footer remains
             for (Player viewer : server.getAllPlayers()) {
@@ -71,11 +72,18 @@ public class TabListManager {
             return;
         }
 
-        int online = server.getAllPlayers().size();
-        Component header = Component.text(ColorUtils.translate(
-                config.getTabListHeader().replace("{online}", String.valueOf(online))));
-        Component footer = Component.text(ColorUtils.translate(
-                config.getTabListFooter().replace("{online}", String.valueOf(online))));
+        // Header/footer are only owned by the plugin when manage-header-footer is on.
+        // When off (e.g. Carpet /log owns the tab footer), pass null so refreshViewer
+        // never writes or clears header/footer and the backend keeps them.
+        Component header = null;
+        Component footer = null;
+        if (manage) {
+            int online = server.getAllPlayers().size();
+            header = Component.text(ColorUtils.translate(
+                    config.getTabListHeader().replace("{online}", String.valueOf(online))));
+            footer = Component.text(ColorUtils.translate(
+                    config.getTabListFooter().replace("{online}", String.valueOf(online))));
+        }
 
         // Snapshot of real online players, sorted by server then name
         List<Player> allPlayers = new ArrayList<>(server.getAllPlayers());
@@ -93,20 +101,17 @@ public class TabListManager {
         var tab = viewer.getTabList();
         UUID viewerId = viewer.getUniqueId();
         try {
-            tab.setHeaderAndFooter(header, footer);
+            // Only own the header/footer region when manage-header-footer is on
+            // (header is null when the plugin handed that region to the backend).
+            if (header != null) {
+                tab.setHeaderAndFooter(header, footer);
+            }
 
             // Remembered cross-server entries we added for this viewer
             Set<UUID> added = proxyEntries.computeIfAbsent(viewerId, k -> ConcurrentHashMap.newKeySet());
-            // Look up every real online player by profile id AND by lowercase username.
-            // UUID is the primary key, but a real player's entry may carry an id the
-            // proxy no longer resolves (see below); the name lookup is a fallback and
-            // is safe because no fake player shares a real player's name.
+            // Look up every real online player by their tab-list profile id.
             Map<UUID, Player> byProfileId = new HashMap<>();
-            Map<String, Player> byName = new HashMap<>();
-            for (Player p : allPlayers) {
-                byProfileId.put(p.getGameProfile().getId(), p);
-                byName.put(p.getUsername().toLowerCase(), p);
-            }
+            for (Player p : allPlayers) byProfileId.put(p.getGameProfile().getId(), p);
             // The profile ids currently present in the viewer's own tab
             Set<UUID> present = new HashSet<>();
             // The lowercased entry names already present (used to avoid re-adding a
@@ -123,24 +128,18 @@ public class TabListManager {
                         .orElse("<none>");
                 present.add(id);
                 String entryName = entry.getProfile().getName();
-                // Resolve the real player: prefer UUID, then fall back to name. Since a
-                // fake player can't carry a real player's name, a name hit is treated as
-                // a real player even if the UUID no longer resolves.
+                // Resolve the real player by UUID only.  Name matching is intentionally
+                // disabled: a Carpet fake player can share a real player's name, and
+                // matching by name would misclassify the bot as the real player, hiding
+                // the actual player from the tab.
                 Player target = byProfileId.get(id);
-                boolean nameMatched = false;
-                if (target == null && entryName != null) {
-                    target = byName.get(entryName.toLowerCase());
-                    nameMatched = (target != null);
-                }
                 if (target != null) {
-                    // Real online player (same server or elsewhere): refresh formatting.
-                    // If we injected it (cross-server), keep it marked in `added` so it can
-                    // still be cleaned up once the player disconnects.
+                    // Real online player: always apply custom format (server prefix + title).
+                    presentNames.add(target.getUsername().toLowerCase());
                     entry.setDisplayName(entryComponent(target));
                     entry.setLatency(ping(target));
-                    presentNames.add(target.getUsername().toLowerCase());
-                    logger.info("[TabList]   entry id='{}' name='{}' dsp='{}' -> ONLINE '{}' (update{})",
-                            id, entryName, dsp, target.getUsername(), nameMatched ? " via-name" : "");
+                    logger.info("[TabList]   entry id='{}' name='{}' dsp='{}' -> ONLINE '{}'",
+                            id, entryName, dsp, target.getUsername());
                 } else if (added.contains(id)) {
                     // Cross-server player we injected who has since disconnected
                     tab.removeEntry(id);
@@ -149,32 +148,24 @@ public class TabListManager {
                     logger.info("[TabList]   entry id='{}' name='{}' dsp='{}' -> REMOVED (our cross-server, now offline)",
                             id, entryName, dsp);
                 } else {
-                    // Backend-injected entry that isn't a proxy online player — a Carpet
-                    // fake player (or stale leftover). Style it with the viewer's server
-                    // prefix so bots look like part of the partitioned list and stay
-                    // distinguishable from same-named real players.
+                    // Backend-injected entry (Carpet bot or stale leftover) — apply
+                    // the bot-specific format so bots are visually distinct.
                     entry.setDisplayName(botComponent(viewer, entryName));
-                    logger.info("[TabList]   entry id='{}' name='{}' dsp='{}' -> KEPT (fake/backend entry, styled)",
+                    logger.info("[TabList]   entry id='{}' name='{}' dsp='{}' -> KEPT (bot, styled)",
                             id, entryName, dsp);
                 }
             }
 
-            // Add every real online player missing from the list (cross-server players).
-            // Skip the viewer themselves — the client already renders the player in
-            // their own tab, and injecting it here duplicates against a same-named bot.
-            UUID viewerProfileId = viewer.getGameProfile().getId();
+            // Add every real online player missing from the list, with custom format.
             for (Player other : allPlayers) {
                 UUID id = other.getGameProfile().getId();
-                // Skip the viewer themselves and anyone already shown (by id OR by name,
-                // so a UUID-mismatched real entry that matched via-name isn't re-added).
-                if (id.equals(viewerProfileId) || present.contains(id)
+                if (present.contains(id)
                         || presentNames.contains(other.getUsername().toLowerCase())) continue;
                 tab.addEntry(tab.buildEntry(other.getGameProfile(),
-                        entryComponent(other),
-                        ping(other), 0));
+                        entryComponent(other), ping(other), 0));
                 added.add(id);
                 presentNames.add(other.getUsername().toLowerCase());
-                logger.info("[TabList]   ADD id='{}' name='{}' (cross-server/missing)",
+                logger.info("[TabList]   ADD id='{}' name='{}' (missing)",
                         id, other.getUsername());
             }
 
@@ -231,6 +222,16 @@ public class TabListManager {
                 .replace("{player}", name)
                 .replace("{title}", t)
                 .replace("{group}", g));
+    }
+
+    /**
+     * Returns true if both players are connected to the same backend server.
+     */
+    private static boolean isSameServer(Player a, Player b) {
+        return a.getCurrentServer()
+                .flatMap(as -> b.getCurrentServer()
+                        .map(bs -> as.getServerInfo().getName().equals(bs.getServerInfo().getName())))
+                .orElse(false);
     }
 
     private int ping(Player player) {
