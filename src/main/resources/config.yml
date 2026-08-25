@@ -76,6 +76,38 @@ server-aliases:
 #   none  — 关闭通知 / Disabled
 notify-mode: all
 
+# ── 分区聊天 / Chat Channels ───────────────────────────────
+# 玩家可以加入不同频道，只有同频道玩家才能看到彼此的发言（跨服）
+# Players can join channels; only members of the same channel see each other's
+# chat (across servers).
+channels-enabled: true
+# 是否拦截普通聊天并路由到玩家的当前频道（设为 false 时仅 /ch <消息> 发送到频道，
+# 普通聊天直接透传到后端服务器）
+# Whether to intercept normal chat and route it into the player's active channel
+# (when false, only /ch <message> sends to a channel and normal chat goes to the backend)
+route-chat: true
+
+# 频道列表（仅首次启动时生成 channels.yml 使用，之后在 channels.yml 或 /vchat channel 中管理）
+# 如果你想在首次配置时预设频道，取消下方注释 / Uncomment to preset channels on first startup
+# 格式: 频道ID: { display-name: "&a显示名", permission: 进入所需权限(可省), default: true/false }
+# channels:
+#   global:
+#     display-name: "&a全局"
+#     default: true
+#   trade:
+#     display-name: "&6交易"
+#     permission: "velocitychat.channel.trade"
+
+# ── 自定义 TabList / Custom TabList ────────────────────────
+# 禁用时使用每个后端服务器自带的 TabList
+# When disabled, each backend server's own TabList is used
+tablist:
+  enabled: true
+  # 顶部标题 / Header ({online} = 在线人数)
+  header: "&6&lVelocityChat\n&7在线人数: &a{online}"
+  # 底部说明 / Footer
+  footer: "&7Footer"
+
 # ── 群组称号配置 / Group Titles ────────────────────────────
 # 群组系统允许给特定玩家设置称号（显示在跨服广播的玩家名前）
 # Groups let you assign titles displayed before a player's name in broadcasts
@@ -107,6 +139,8 @@ notify-mode: all
 #   qu_an.chat.message.server_switch
 #   qu_an.chat.message.disconnect
 #   qu_an.chat.message.chat.default
+#   qu_an.chat.message.broadcast
+#   qu_an.chat.message.channel
 #   qu_an.chat.message.invite
 #   qu_an.chat.message.invite.click
 #   qu_an.chat.message.invite.hover

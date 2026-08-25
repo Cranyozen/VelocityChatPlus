@@ -388,7 +388,93 @@ public class ConfigManager {
         return "velocitychat.admin";
     }
 
+    // ── 分区聊天 / Channels ──────────────────────────────────
+
+    /**
+     * Whether the channel (分区聊天) feature is enabled at all.
+     * Defaults to false when absent (keeps older configs safe).
+     */
+    public boolean isChannelsEnabled() {
+        return getBoolean("channels-enabled", false);
+    }
+
+    /**
+     * Whether normal player chat is routed through the proxy into the
+     * player's active channel. When disabled, only {@code /ch <message>}
+     * sends to a channel and normal chat goes straight to the backend.
+     */
+    public boolean isRouteChatEnabled() {
+        return getBoolean("route-chat", true);
+    }
+
+    /**
+     * Get the {@code channels:} preset map from config.yml (used to seed
+     * channels.yml on first run). Returns null if not configured.
+     */
+    public Map<?, ?> getChannelsPresets() {
+        if (config != null && config.get("channels") instanceof Map<?, ?> map) {
+            return map;
+        }
+        return null;
+    }
+
+    /**
+     * Get the channel chat message format.
+     * <p>
+     * Placeholders: {0}=channel, {1}=player, {2}=server, {3}=message
+     */
+    public String getChannelFormat() {
+        return messages.getOrDefault("qu_an.chat.message.channel",
+                "§d[§6{0}§d]§r[{1}§r]§r{2} §7>>§f {3}");
+    }
+
+    // ── 自定义 TabList ───────────────────────────────────────
+
+    /**
+     * Whether the custom TabList feature is enabled.
+     */
+    public boolean isTabListEnabled() {
+        if (config != null && config.get("tablist") instanceof Map<?, ?> tab) {
+            Object en = tab.get("enabled");
+            if (en instanceof Boolean b) return b;
+            if (en instanceof String s) return s.equalsIgnoreCase("true");
+            return true; // tablist section present without explicit flag = enabled
+        }
+        return false;
+    }
+
+    /**
+     * Get the TabList header text (with & color codes and placeholders).
+     */
+    public String getTabListHeader() {
+        if (config != null && config.get("tablist") instanceof Map<?, ?> tab) {
+            Object h = tab.get("header");
+            if (h != null && !h.toString().isBlank()) return h.toString();
+        }
+        return "&6VelocityChat";
+    }
+
+    /**
+     * Get the TabList footer text (with & color codes and placeholders).
+     */
+    public String getTabListFooter() {
+        if (config != null && config.get("tablist") instanceof Map<?, ?> tab) {
+            Object f = tab.get("footer");
+            if (f != null && !f.toString().isBlank()) return f.toString();
+        }
+        return "&7在线 &a{online} &r&7人";
+    }
+
     // ── Internal Helpers ─────────────────────────────────────
+
+    private boolean getBoolean(String key, boolean def) {
+        if (config != null && config.containsKey(key)) {
+            Object val = config.get(key);
+            if (val instanceof Boolean b) return b;
+            if (val instanceof String s) return s.equalsIgnoreCase("true");
+        }
+        return def;
+    }
 
     /**
      * Merge keys from a built-in language resource that are missing from the current

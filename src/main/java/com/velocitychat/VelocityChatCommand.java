@@ -30,15 +30,18 @@ public class VelocityChatCommand implements SimpleCommand {
     private final ConfigManager config;
     private final ForbiddenWordsManager forbiddenWords;
     private final AutoBroadcast autoBroadcast;
+    private final ChannelManager channelManager;
     private final Logger logger;
 
     public VelocityChatCommand(ProxyServer server, GroupManager groupManager, ConfigManager config,
-                               ForbiddenWordsManager forbiddenWords, AutoBroadcast autoBroadcast, Logger logger) {
+                               ForbiddenWordsManager forbiddenWords, AutoBroadcast autoBroadcast,
+                               ChannelManager channelManager, Logger logger) {
         this.server = server;
         this.groupManager = groupManager;
         this.config = config;
         this.forbiddenWords = forbiddenWords;
         this.autoBroadcast = autoBroadcast;
+        this.channelManager = channelManager;
         this.logger = logger;
     }
 
@@ -65,6 +68,10 @@ public class VelocityChatCommand implements SimpleCommand {
                 if (!checkPerm(source, "velocitychat.admin.reload", "velocitychat.admin")) { noPermission(source); return; }
                 handleReload(source);
             }
+            case "channel" -> {
+                if (!checkPerm(source, "velocitychat.admin.channel.*", "velocitychat.admin")) { noPermission(source); return; }
+                handleChannel(source, args);
+            }
             default -> sendHelp(source);
         }
     }
@@ -82,7 +89,7 @@ public class VelocityChatCommand implements SimpleCommand {
 
         // First argument: subcommands
         if (args.length <= 1) {
-            return filterSuggestions(List.of("create", "group", "reload"), prefix);
+            return filterSuggestions(List.of("create", "group", "reload", "channel"), prefix);
         }
 
         // Second level suggestions
@@ -94,6 +101,13 @@ public class VelocityChatCommand implements SimpleCommand {
                     suggestions.add("list");
                     yield filterSuggestions(suggestions, prefix);
                 }
+                case "channel" -> {
+                    List<String> suggestions = new ArrayList<>(channelManager.getChannels().stream()
+                            .map(c -> c.getId()).toList());
+                    suggestions.add(0, "add");
+                    suggestions.add("list");
+                    yield filterSuggestions(suggestions, prefix);
+                }
                 default -> List.of();
             };
         }
@@ -102,6 +116,9 @@ public class VelocityChatCommand implements SimpleCommand {
         if (args.length == 3) {
             if (args[0].equalsIgnoreCase("group")) {
                 return filterSuggestions(List.of("join", "remove", "settitle", "delete", "list"), prefix);
+            }
+            if (args[0].equalsIgnoreCase("channel")) {
+                return filterSuggestions(List.of("remove", "setdefault", "setname"), prefix);
             }
         }
 
@@ -263,14 +280,123 @@ public class VelocityChatCommand implements SimpleCommand {
         }
     }
 
+    // ── 频道管理 / Channel management ─────────────────────────
+
+    private void handleChannel(CommandSource source, String[] args) {
+        if (args.length < 2) {
+            ColorUtils.sendMessage(source, logger, "§c用法: /velocitychat channel add/remove/setdefault/setname/list");
+            return;
+        }
+
+        switch (args[1].toLowerCase()) {
+            case "add" -> handleChannelAdd(source, args);
+            case "remove" -> handleChannelRemove(source, args);
+            case "setdefault" -> handleChannelDefault(source, args);
+            case "setname" -> handleChannelName(source, args);
+            case "list" -> handleChannelList(source);
+            default -> ColorUtils.sendMessage(source, logger, "§c未知操作。可用: add, remove, setdefault, setname, list");
+        }
+    }
+
+    private void handleChannelAdd(CommandSource source, String[] args) {
+        if (args.length < 3) {
+            ColorUtils.sendMessage(source, logger, "§c用法: /velocitychat channel add <ID> [显示名称] [权限] [默认]");
+            return;
+        }
+        String id = args[2].toLowerCase();
+        String name = args.length > 3 ? String.join(" ", Arrays.copyOfRange(args, 3, args.length)) : id;
+        String permission = null;
+        boolean isDefault = false;
+
+        // Optional flags: --perm <node>, --default
+        List<String> tail = new ArrayList<>();
+        for (int i = 3; i < args.length; i++) {
+            if (args[i].equalsIgnoreCase("--perm") && i + 1 < args.length) {
+                permission = args[i + 1];
+                i++;
+            } else if (args[i].equalsIgnoreCase("--default")) {
+                isDefault = true;
+            } else {
+                tail.add(args[i]);
+            }
+        }
+        if (!tail.isEmpty()) {
+            name = String.join(" ", tail);
+        }
+
+        if (channelManager.createChannel(id, name, permission, isDefault)) {
+            ColorUtils.sendMessage(source, logger, "§a频道 '" + id + "' 已创建 (显示名: " + ColorUtils.translate(name) + ")");
+        } else {
+            ColorUtils.sendMessage(source, logger, "§c频道 '" + id + "' 已存在！");
+        }
+    }
+
+    private void handleChannelRemove(CommandSource source, String[] args) {
+        if (args.length < 3) {
+            ColorUtils.sendMessage(source, logger, "§c用法: /velocitychat channel remove <ID>");
+            return;
+        }
+        String id = args[2].toLowerCase();
+        if (channelManager.removeChannel(id)) {
+            ColorUtils.sendMessage(source, logger, "§a频道 '" + id + "' 已删除");
+        } else {
+            ColorUtils.sendMessage(source, logger, "§c频道 '" + id + "' 不存在！");
+        }
+    }
+
+    private void handleChannelDefault(CommandSource source, String[] args) {
+        if (args.length < 3) {
+            ColorUtils.sendMessage(source, logger, "§c用法: /velocitychat channel setdefault <ID>");
+            return;
+        }
+        String id = args[2].toLowerCase();
+        if (channelManager.setDefault(id)) {
+            ColorUtils.sendMessage(source, logger, "§a已将 '" + id + "' 设为默认频道");
+        } else {
+            ColorUtils.sendMessage(source, logger, "§c频道 '" + id + "' 不存在！");
+        }
+    }
+
+    private void handleChannelName(CommandSource source, String[] args) {
+        if (args.length < 4) {
+            ColorUtils.sendMessage(source, logger, "§c用法: /velocitychat channel setname <ID> <显示名称>");
+            return;
+        }
+        String id = args[2].toLowerCase();
+        String name = String.join(" ", Arrays.copyOfRange(args, 3, args.length));
+        if (channelManager.setDisplayName(id, name)) {
+            ColorUtils.sendMessage(source, logger, "§a频道 '" + id + "' 的显示名已更新为: " + ColorUtils.translate(name));
+        } else {
+            ColorUtils.sendMessage(source, logger, "§c频道 '" + id + "' 不存在！");
+        }
+    }
+
+    private void handleChannelList(CommandSource source) {
+        var channels = channelManager.getChannels();
+        if (channels.isEmpty()) {
+            ColorUtils.sendMessage(source, logger, "§e当前没有可用频道。");
+            return;
+        }
+        ColorUtils.sendMessage(source, logger, "§6=== 频道列表 (" + channels.size() + " 个) ===");
+        for (var c : channels) {
+            String marker = c.isDefault() ? " §8[默认]" : "";
+            String perm = c.getPermission() == null || c.getPermission().isBlank()
+                    ? "" : " §7(需: " + c.getPermission() + ")";
+            String online = " §8(" + channelManager.getChannelPlayerCount(c.getId()) + " 人)";
+            ColorUtils.sendMessage(source, logger, "§e" + c.getId() + " §7- " + c.displayName()
+                    + marker + perm + online);
+        }
+    }
+
     private void handleReload(CommandSource source) {
         config.reload();
         groupManager.load();
         forbiddenWords.load(config);
+        channelManager.load(config);
         autoBroadcast.load();
         autoBroadcast.start();
-        ColorUtils.sendMessage(source, logger, "§a配置文件、语言文件、群组数据、违禁词列表及定时消息已重载！");
-        logger.info("Configuration, groups, forbidden words and auto broadcast reloaded by " + source);
+        ColorUtils.sendMessage(source, logger, "§a配置文件、语言文件、群组、频道、违禁词列表及定时消息已重载！");
+        logger.info("Configuration, groups, channels, forbidden words and auto broadcast reloaded by " + source);
     }
 
     // ── Permission Helper ─────────────────────────────────────
@@ -302,6 +428,11 @@ public class VelocityChatCommand implements SimpleCommand {
         ColorUtils.sendMessage(source, logger, "§7/vchat group <名称> settitle <称号> §f- 修改称号");
         ColorUtils.sendMessage(source, logger, "§7/vchat group <名称> delete §f- 删除群组");
         ColorUtils.sendMessage(source, logger, "§7/vchat group list §f- 查看所有群组");
+        ColorUtils.sendMessage(source, logger, "§7/vchat channel add <ID> [名称] [--perm 权限] [--default] §f- 创建频道");
+        ColorUtils.sendMessage(source, logger, "§7/vchat channel remove <ID> §f- 删除频道");
+        ColorUtils.sendMessage(source, logger, "§7/vchat channel setdefault <ID> §f- 设置默认频道");
+        ColorUtils.sendMessage(source, logger, "§7/vchat channel setname <ID> <名称> §f- 修改频道显示名");
+        ColorUtils.sendMessage(source, logger, "§7/vchat channel list §f- 查看所有频道");
         ColorUtils.sendMessage(source, logger, "§7/vchat reload §f- 重载配置文件");
         ColorUtils.sendMessage(source, logger, "§7/vchat §f- 显示此帮助");
     }

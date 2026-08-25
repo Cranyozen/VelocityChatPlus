@@ -23,6 +23,8 @@ Chat together across your entire server network. Install **only on the Velocity 
 - **Join / switch / leave announcements** — automatic messages when players join, switch servers, or disconnect
 - **Server aliases** — show friendly names like "登录服" instead of raw server IDs, configured directly in `config.yml` (`serverId: "&aDisplayName"`)
 - **Group titles** — create groups and assign title prefixes shown before player names in chat
+- **Chat channels** — partitioned (分区) cross-server chat: players join a channel with `/ch` and only members of the same channel see each other's messages; channels can be permission-gated and one is the default
+- **Custom TabList** — override header, footer and player entries across the network (configured in the `tablist:` section)
 - **Granular permissions** — `velocitychat.admin.*` sub-nodes, works with LuckPerms (optional dependency)
 - **Broadcast cooldown** — optional anti-spam cooldown, admins can bypass
 - **Message visibility** — join/switch/leave alerts can be shown to everyone, admins only, or disabled
@@ -53,6 +55,10 @@ Chat together across your entire server network. Install **only on the Velocity 
 |---|---|---|
 | `/br <message>` (alias `/broadcast`, configurable) | Send a cross-server chat message to all players | everyone |
 | `/yq [message]` | Broadcast a server invite into the cross-server chat; others click to join your server | everyone |
+| `/ch <message>` (alias `/channel`) | Send a message to your current channel | everyone |
+| `/ch join <id>` | Join a channel (only channel members see each other's chat) | per-channel permission |
+| `/ch leave` | Leave your channel back to the default | everyone |
+| `/ch list` | List all channels | everyone |
 
 ### Admin commands (`/velocitychat`, alias `/vchat`)
 
@@ -64,7 +70,12 @@ Chat together across your entire server network. Install **only on the Velocity 
 | `/vchat group <name> settitle <title>` | Change the group's title | `velocitychat.admin.group.settitle` |
 | `/vchat group <name> delete` | Delete a group | `velocitychat.admin.group.delete` |
 | `/vchat group list` | List all groups and their members | `velocitychat.admin.group.list` |
-| `/vchat reload` | Hot-reload config, language files, group data, forbidden words & timed announcements | `velocitychat.admin.reload` |
+| `/vchat channel add <id> [name] [--perm node] [--default]` | Create a channel (optional permission & default flag) | `velocitychat.admin.channel.*` |
+| `/vchat channel remove <id>` | Delete a channel | `velocitychat.admin.channel.*` |
+| `/vchat channel setdefault <id>` | Set the default channel | `velocitychat.admin.channel.*` |
+| `/vchat channel setname <id> <name>` | Change a channel's display name | `velocitychat.admin.channel.*` |
+| `/vchat channel list` | List all channels and member counts | `velocitychat.admin.channel.*` |
+| `/vchat reload` | Hot-reload config, language files, group & channel data, forbidden words & timed announcements | `velocitychat.admin.reload` |
 
 Titles support `&` color codes, e.g. `/vchat create group admin &c&l[Admin]`.
 
@@ -80,6 +91,7 @@ Titles support `&` color codes, e.g. `/vchat create group admin &c&l[Admin]`.
 | `velocitychat.admin.group.settitle` | Change group titles |
 | `velocitychat.admin.group.delete` | Delete groups |
 | `velocitychat.admin.group.list` | List groups and members |
+| `velocitychat.admin.channel.*` | Wildcard for all channel-management permissions |
 | `velocitychat.admin.reload` | Reload configuration |
 
 > **Tip:** LuckPerms example — `/lpv user <player> permission set velocitychat.admin true`
@@ -101,10 +113,14 @@ Key settings (all commented in the generated file):
 | `forbidden-words-bypass-permission` | `velocitychat.admin` | Permission that bypasses the forbidden-word filter |
 | `server-aliases` | map presets | Servers that show a display name: `serverId: "&aDisplayName"` (supports `&` colors) |
 | `notify-mode` | `all` | Join/switch/leave visibility: `all`, `admin` (admins only), or `none` (disabled) |
+| `channels-enabled` | `true` | Enable the channel (分区) chat feature |
+| `route-chat` | `true` | Intercept normal chat and route it to the player's active channel |
+| `channels` | — | Preset channels seeded into `channels.yml` on first startup |
+| `tablist` | disabled | Custom TabList: `enabled`, `header`, `footer` (supports `{online}` placeholder) |
 | `groups` | — | Preset groups generated on first startup |
 | `messages` | — | Override individual language-file messages (takes priority) |
 
-Group data is stored in a `groups.yml` file. Banned words live in `banned_words.txt`, and timed announcements are configured in `auto_broadcast.yml` (all generated on first startup).
+Group data is stored in a `groups.yml` file, channel data in `channels.yml`. Banned words live in `banned_words.txt`, and timed announcements are configured in `auto_broadcast.yml` (all generated on first startup).
 
 ## Building from source
 
@@ -116,7 +132,7 @@ cd Velocity_Plugin/VelocityChat
 mvn package
 ```
 
-The built plugin is at `target/VelocityChat-2.1.0.jar`.
+The built plugin is at `target/VelocityChat-2.2.0.jar`.
 
 ## Changelog
 

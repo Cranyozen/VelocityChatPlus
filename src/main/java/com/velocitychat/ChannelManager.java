@@ -1,0 +1,365 @@
+package com.velocitychat;
+
+import com.velocitypowered.api.proxy.Player;
+import com.velocitypowered.api.proxy.ProxyServer;
+import net.kyori.adventure.text.Component;
+import org.slf4j.Logger;
+import org.yaml.snakeyaml.Yaml;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Manages chat channels (分区聊天).
+ * <p>
+ * Channels let players chat with only those on the same channel, across servers.
+ * Channel definitions live in a {@code channels.yml} data file (seeded from
+ * config presets on first run), while each player's active channel is tracked
+ * in-memory for the current session.
+ */
+public class ChannelManager {
+
+    private final Logger logger;
+    private final Path dataDirectory;
+    private final ProxyServer server;
+
+    // channel id (lowercase) -> channel
+    private final Map<String, Channel> channels = new ConcurrentHashMap<>();
+    // active channel: player UUID -> channel id (session-scoped, in-memory)
+    private final Map<UUID, String> playerChannel = new ConcurrentHashMap<>();
+
+    public ChannelManager(Logger logger, Path dataDirectory, ProxyServer server) {
+        this.logger = logger;
+        this.dataDirectory = dataDirectory;
+        this.server = server;
+    }
+
+    /**
+     * Load channels.yml (seeding from config.yml presets on first run).
+     */
+    @SuppressWarnings("unchecked")
+    public void load(ConfigManager config) {
+        channels.clear();
+        Path file = dataDirectory.resolve("channels.yml");
+
+        if (!Files.exists(file)) {
+            // First run: seed from config.yml `channels` presets
+            loadFromConfig(config);
+            ensureDefaultChannel();
+            save();
+            logger.info("Generated channels.yml with {} channel(s) from config.yml", channels.size());
+            return;
+        }
+
+        try (InputStream in = Files.newInputStream(file)) {
+            Object loaded = new Yaml().load(in);
+            if (loaded instanceof Map<?, ?> root && root.get("channels") instanceof List<?> list) {
+                for (Object obj : list) {
+                    if (!(obj instanceof Map<?, ?> entry)) continue;
+                    String id = str(entry.get("id"));
+                    String name = str(entry.get("display-name"));
+                    String perm = str(entry.get("permission"));
+                    boolean def = bool(entry.get("default"));
+                    if (id == null) continue;
+                    channels.put(id.toLowerCase(), new Channel(id,
+                            name == null ? id : name, perm, def));
+                }
+            }
+            logger.info("Loaded {} channel(s) from channels.yml", channels.size());
+        } catch (Exception e) {
+            logger.warn("Failed to load channels.yml", e);
+            loadFromConfig(config);
+        }
+
+        ensureDefaultChannel();
+    }
+
+    /**
+     * Read channel presets out of the {@code channels:} section of config.yml.
+     */
+    @SuppressWarnings("unchecked")
+    private void loadFromConfig(ConfigManager config) {
+        Map<?, ?> chan = config.getChannelsPresets();
+        if (chan == null) return;
+        for (var e : chan.entrySet()) {
+            if (!(e.getKey() instanceof String id)) continue;
+            String name = id;
+            String perm = null;
+            boolean def = false;
+            if (e.getValue() instanceof Map<?, ?> opts) {
+                if (opts.get("display-name") != null) name = opts.get("display-name").toString();
+                if (opts.get("permission") != null) perm = opts.get("permission").toString();
+                if (opts.get("default") != null) def = bool(opts.get("default"));
+            } else if (e.getValue() != null) {
+                name = e.getValue().toString();
+            }
+            channels.put(id.toLowerCase(), new Channel(id, name, perm, def));
+        }
+    }
+
+    private void ensureDefaultChannel() {
+        if (channels.values().stream().noneMatch(Channel::isDefault)) {
+            // No default channel configured — create one if there are channels, else seed "global"
+            String id = channels.isEmpty() ? "global" : channels.keySet().iterator().next();
+            channels.put(id.toLowerCase(), new Channel(id, id, null, true));
+            logger.info("No default channel configured; set '{}' as default", id);
+        }
+    }
+
+    /**
+     * Persist channels to channels.yml.
+     */
+    public void save() {
+        Path file = dataDirectory.resolve("channels.yml");
+        StringBuilder sb = new StringBuilder();
+        sb.append("# VelocityChat Channels Data\n");
+        sb.append("# 请勿手动编辑此文件 / Do not edit this file manually\n");
+        sb.append("channels:\n");
+        for (Channel c : channels.values()) {
+            sb.append("  - id: \"").append(escape(c.id)).append("\"\n");
+            sb.append("    display-name: \"").append(escape(c.displayName)).append("\"\n");
+            if (c.permission != null && !c.permission.isBlank()) {
+                sb.append("    permission: \"").append(escape(c.permission)).append("\"\n");
+            }
+            sb.append("    default: ").append(c.isDefault).append("\n");
+        }
+        try {
+            Files.createDirectories(dataDirectory);
+            Files.writeString(file, sb.toString());
+        } catch (IOException e) {
+            logger.warn("Failed to save channels.yml", e);
+        }
+    }
+
+    // ── Channel Management API ───────────────────────────────
+
+    /**
+     * Create a channel.
+     *
+     * @return true if created, false if it already exists
+     */
+    public boolean createChannel(String id, String displayName, String permission, boolean isDefault) {
+        String key = id.toLowerCase();
+        if (channels.containsKey(key)) return false;
+        Channel c = new Channel(id, displayName == null ? id : displayName, permission, isDefault);
+        channels.put(key, c);
+        if (isDefault) setDefault(key);
+        save();
+        logger.info("Created channel '{}'", id);
+        return true;
+    }
+
+    /**
+     * Remove a channel. Players tuned to it fall back to the default channel.
+     *
+     * @return true if removed
+     */
+    public boolean removeChannel(String id) {
+        String key = id.toLowerCase();
+        if (channels.remove(key) == null) {
+            setDefault(getFirstId());
+            return false;
+        }
+        playerChannel.entrySet().removeIf(e -> e.getValue().equals(key));
+        if (key.equals(getDefaultId())) {
+            setDefault(getFirstId());
+            ensureDefaultChannel();
+        }
+        save();
+        logger.info("Removed channel '{}'", id);
+        return true;
+    }
+
+    /**
+     * Mark a channel as the default (clearing others).
+     */
+    public boolean setDefault(String id) {
+        String key = id.toLowerCase();
+        Channel target = channels.get(key);
+        if (target == null) return false;
+        for (Channel c : channels.values()) c.isDefault = c.id.equalsIgnoreCase(key);
+        save();
+        logger.info("Set '{}' as default channel", id);
+        return true;
+    }
+
+    /**
+     * Set a channel's display name.
+     */
+    public boolean setDisplayName(String id, String displayName) {
+        Channel c = channels.get(id.toLowerCase());
+        if (c == null) return false;
+        c.displayName = displayName;
+        save();
+        return true;
+    }
+
+    public Optional<Channel> getChannel(String id) {
+        return Optional.ofNullable(channels.get(id.toLowerCase()));
+    }
+
+    public Channel getDefaultChannel() {
+        for (Channel c : channels.values()) {
+            if (c.isDefault) return c;
+        }
+        return channels.isEmpty() ? null : channels.values().iterator().next();
+    }
+
+    public Collection<Channel> getChannels() {
+        return Collections.unmodifiableCollection(channels.values());
+    }
+
+    public boolean channelExists(String id) {
+        return channels.containsKey(id.toLowerCase());
+    }
+
+    private String getDefaultId() {
+        Channel d = getDefaultChannel();
+        return d == null ? null : d.id.toLowerCase();
+    }
+
+    private String getFirstId() {
+        return channels.isEmpty() ? null : channels.keySet().iterator().next();
+    }
+
+    /**
+     * Whether a player may join the given channel (no permission required = open).
+     */
+    public boolean canJoin(Player player, Channel channel) {
+        return channel.permission == null || channel.permission.isBlank()
+                || player.hasPermission(channel.permission);
+    }
+
+    // ── Player active-channel API ────────────────────────────
+
+    /**
+     * Get the channel a player currently chats in. Falls back to the default channel.
+     */
+    public Optional<Channel> getPlayerChannel(Player player) {
+        String id = playerChannel.get(player.getUniqueId());
+        Channel c = id == null ? null : channels.get(id);
+        if (c == null) {
+            // Player not in any valid channel — default fallback (do not persist)
+            c = getDefaultChannel();
+        }
+        return Optional.ofNullable(c);
+    }
+
+    /**
+     * Switch a player to a channel. Returns null if the channel doesn't exist.
+     */
+    public Channel setPlayerChannel(Player player, String id) {
+        Channel c = channels.get(id.toLowerCase());
+        if (c == null) return null;
+        playerChannel.put(player.getUniqueId(), c.id.toLowerCase());
+        return c;
+    }
+
+    /**
+     * Reset a player back to the default channel (used on disconnect).
+     */
+    public void resetPlayerChannel(Player player) {
+        playerChannel.remove(player.getUniqueId());
+    }
+
+    // ── Chat Broadcast ───────────────────────────────────────
+
+    /**
+     * Broadcast a chat message to every online player on the given channel.
+     * The sender also receives it if they're a channel member.
+     *
+     * @param channelId    target channel
+     * @param formatted    fully formatted message (already color-translated)
+     * @param includeSender whether to also deliver to the sender
+     */
+    public void broadcastToChannel(String channelId, String formatted, boolean includeSender, Player sender) {
+        Component component = Component.text(formatted);
+        String key = channelId.toLowerCase();
+        String defaultKey = getDefaultId();
+        if (includeSender && sender != null) {
+            sender.sendMessage(component);
+        }
+        for (Player pl : server.getAllPlayers()) {
+            if (includeSender && sender != null
+                    && pl.getUniqueId().equals(sender.getUniqueId())) continue;
+            // Effective channel: explicit selection, else the default channel
+            String active = playerChannel.get(pl.getUniqueId());
+            if (active == null) active = defaultKey;
+            if (key.equals(active)) {
+                pl.sendMessage(component);
+            }
+        }
+    }
+
+    /**
+     * Number of online players currently tuned to a channel (defaults count toward
+     * the default channel even if they never explicitly joined).
+     */
+    public int getChannelPlayerCount(String channelId) {
+        String key = channelId.toLowerCase();
+        String defaultKey = getDefaultId();
+        int count = 0;
+        for (Player pl : server.getAllPlayers()) {
+            String active = playerChannel.get(pl.getUniqueId());
+            if (active == null) active = defaultKey;
+            if (key.equals(active)) count++;
+        }
+        return count;
+    }
+
+    // ── Internal ─────────────────────────────────────────────
+
+    private static String str(Object o) {
+        return o == null ? null : o.toString();
+    }
+
+    private static boolean bool(Object o) {
+        if (o instanceof Boolean b) return b;
+        if (o instanceof String s) return s.equalsIgnoreCase("true");
+        return false;
+    }
+
+    private static String escape(String s) {
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    /**
+     * A single chat channel definition.
+     */
+    public static class Channel {
+        private final String id;
+        private String displayName;
+        private final String permission;
+        private boolean isDefault;
+
+        public Channel(String id, String displayName, String permission, boolean isDefault) {
+            this.id = id;
+            this.displayName = displayName;
+            this.permission = permission;
+            this.isDefault = isDefault;
+        }
+
+        public String getId() { return id; }
+        public String getDisplayName() { return displayName; }
+        public void setDisplayName(String displayName) { this.displayName = displayName; }
+        public String getPermission() { return permission; }
+        public boolean isDefault() { return isDefault; }
+
+        /**
+         * Display name with & color codes translated.
+         */
+        public String displayName() {
+            return ColorUtils.translate(displayName == null ? id : displayName);
+        }
+    }
+}

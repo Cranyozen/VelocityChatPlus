@@ -1,0 +1,33 @@
+# ── IDE / 编辑器配置 ─────────────────────────
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# ── 构建产物 / Build output ──────────────────
+build/
+target/
+out/
+.gradle/
+
+# ── 编译出的插件 jar（源码仓库不存放二进制）───
+*.jar
+!gradle-wrapper.jar
+
+# ── 本地数据库 / 运行时数据 ──────────────────
+*.db
+*.db-shm
+*.db-wal
+groups.yml
+
+# ── 本地备份（历史版本 jar）──────────────────
+_jar备份/
+
+# ── 其他插件（暂未上传）──────────────────────
+\[获取子服人数\]ServerInfoBridge/
+\[跨服tp\]VelocityTP/
+\[限制同IP进服的账号\]VelocityMultiAccountLimit/
+
+# ── 本地图标（不上传）──────────────────────
+VelocityChat/icon.png

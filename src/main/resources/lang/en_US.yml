@@ -48,6 +48,32 @@ qu_an.chat.message.invite.no_server: "§cYou are not on a server, cannot send an
 # Message blocked by the forbidden-word filter
 qu_an.chat.message.filter.blocked: "§cYour message contains a banned word and was blocked!"
 
+# ── Channel Chat Format ──
+# {0}: channel, {1}: player name, {2}: server name, {3}: message
+qu_an.chat.message.channel: "§d[§6{0}§d]§r[{2}§r]§r{1} §7>>§f {3}"
+
+# ── Chat Channels ──
+# Players-only
+ch.console: "§cOnly players can use this command"
+# Feature disabled
+ch.disabled: "§cChannel chat is disabled"
+# Current channel & member count ({0}=channel, {1}=count)
+ch.status: "§7You are in channel §r{0} §7({1} online)"
+# Join usage
+ch.join.usage: "§cUsage: /ch join <channel>"
+# Channel not found ({0}=channel id)
+ch.not_found: "§cChannel '{0}' does not exist!"
+# No permission ({0}=channel)
+ch.no_permission: "§cYou don't have permission to join channel {0}"
+# Joined channel ({0}=channel)
+ch.joined: "§aYou joined channel {0}"
+# Already on default channel
+ch.already_default: "§7You are already on the default channel"
+# Left channel ({0}=default channel)
+ch.left: "§7You left your channel and are back on {0}"
+# No active channel
+ch.no_channel: "§cYou are not in any channel, cannot send a message"
+
 # ── Server Aliases / Server Names ──
 # Format: qu_an.chat.server.name.<server_id>=<display_name>
 # Servers without an alias will display the raw server ID

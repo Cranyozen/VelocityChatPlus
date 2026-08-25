@@ -30,8 +30,8 @@ import java.util.List;
 @Plugin(
         id = "velocity-chat",
         name = "VelocityChat",
-        version = "2.1.0",
-        description = "Cross-server proxy chat plugin — broadcast, join/switch/leave messages, server invites, forbidden-word filter, timed announcements with server aliases",
+        version = "2.2.0",
+        description = "Cross-server proxy chat plugin — broadcast, join/switch/leave messages, server invites, forbidden-word filter, timed announcements, channel chat, custom TabList, server aliases",
         authors = {"YuHongChen(LiquidTeam) QQ:1464670605"},
         url = "https://github.com/LiquidTeamYHC/Velocity_Plugin/tree/main/VelocityChat",
         dependencies = {
@@ -48,6 +48,8 @@ public class VelocityChat {
     private GroupManager groupManager;
     private ForbiddenWordsManager forbiddenWordsManager;
     private AutoBroadcast autoBroadcast;
+    private ChannelManager channelManager;
+    private TabListManager tabListManager;
 
     @Inject
     public VelocityChat(ProxyServer server, Logger logger, @DataDirectory Path dataDirectory) {
@@ -84,13 +86,26 @@ public class VelocityChat {
         autoBroadcast.load();
         autoBroadcast.start();
 
+        // ── Initialize chat channels (分区聊天) ──
+        channelManager = new ChannelManager(logger, dataDirectory, server);
+        channelManager.load(configManager);
+
+        // ── Initialize custom TabList ──
+        tabListManager = new TabListManager(this, server, configManager, logger);
+        tabListManager.start();
+
         // ── Register commands ──
         registerCommands();
 
         // ── Register event listeners ──
         server.getEventManager().register(this, new PlayerListener(server, configManager, logger));
 
-        logger.info("VelocityChat v2.1.0 enabled");
+        var channelCommand = new ChannelChatCommand(server, channelManager, configManager,
+                groupManager, forbiddenWordsManager, logger);
+        server.getEventManager().register(this, new ChatRouter(channelManager, configManager,
+                channelCommand, logger));
+
+        logger.info("VelocityChat v2.2.0 enabled");
         logger.info("Author: YuHongChen(LiquidTeam) QQ:1464670605");
     }
 
@@ -104,6 +119,7 @@ public class VelocityChat {
     @Subscribe
     public void onProxyShutdown(ProxyShutdownEvent event) {
         autoBroadcast.stop();
+        tabListManager.stop();
         logger.info("VelocityChat disabled");
     }
 
@@ -138,8 +154,19 @@ public class VelocityChat {
                 .aliases("vchat")
                 .plugin(this)
                 .build();
-        cmdManager.register(vchatMeta, new VelocityChatCommand(server, groupManager, configManager, forbiddenWordsManager, autoBroadcast, logger));
+        cmdManager.register(vchatMeta, new VelocityChatCommand(server, groupManager, configManager,
+                forbiddenWordsManager, autoBroadcast, channelManager, logger));
         logger.info("Registered admin command: /velocitychat (/vchat)");
+
+        // Register /ch chat channel command (with /channel alias)
+        var channelCommand = new ChannelChatCommand(server, channelManager, configManager,
+                groupManager, forbiddenWordsManager, logger);
+        var chMeta = cmdManager.metaBuilder("ch")
+                .aliases("channel")
+                .plugin(this)
+                .build();
+        cmdManager.register(chMeta, channelCommand);
+        logger.info("Registered channel command: /ch (/channel)");
 
         // Register /yq cross-server invite command
         var inviteMeta = cmdManager.metaBuilder("yq")
@@ -168,5 +195,19 @@ public class VelocityChat {
      */
     public AutoBroadcast getAutoBroadcast() {
         return autoBroadcast;
+    }
+
+    /**
+     * Returns the chat channel manager instance.
+     */
+    public ChannelManager getChannelManager() {
+        return channelManager;
+    }
+
+    /**
+     * Returns the custom TabList manager instance.
+     */
+    public TabListManager getTabListManager() {
+        return tabListManager;
     }
 }

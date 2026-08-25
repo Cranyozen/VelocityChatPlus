@@ -48,6 +48,33 @@ qu_an.chat.message.invite.no_server: "§c你当前不在任何服务器中，无
 # 消息包含违禁词被拦截 / Message blocked by the forbidden-word filter
 qu_an.chat.message.filter.blocked: "§c你的消息包含违禁词，已被拦截！"
 
+# ── 频道聊天格式 / Channel Chat Format ──
+# {0}: 频道显示名, {1}: 玩家名, {2}: 服务器名, {3}: 消息内容
+# {0}: channel, {1}: player name, {2}: server name, {3}: message
+qu_an.chat.message.channel: "§d[§6{0}§d]§r[{2}§r]§r{1} §7>>§f {3}"
+
+# ── 分区聊天 / Chat Channels ──
+# 仅玩家可用 / Players-only
+ch.console: "§c只有玩家可以使用此命令"
+# 功能未开启 / Feature disabled
+ch.disabled: "§c频道聊天功能未开启"
+# 当前频道及在线人数 ({0}=频道, {1}=人数) / Current channel & member count
+ch.status: "§7你当前在频道 §r{0} §7(在线 §r{1}§7 人)"
+# 加入频道用法 / Join usage
+ch.join.usage: "§c用法: /ch join <频道ID>"
+# 频道不存在 / Channel not found ({0}=频道ID)
+ch.not_found: "§c频道 '{0}' 不存在！"
+# 无权限加入 / No permission ({0}=频道)
+ch.no_permission: "§c你没有权限加入频道 {0}"
+# 已加入频道 / Joined channel ({0}=频道)
+ch.joined: "§a你已加入频道 {0}"
+# 已在默认频道无法离开 / Already on default channel
+ch.already_default: "§7你已经在默认频道，无需离开"
+# 已返回默认频道 / Left channel ({0}=默认频道)
+ch.left: "§7你已离开当前频道，回到默认频道 {0}"
+# 未在任何频道 / No active channel
+ch.no_channel: "§c你当前不在任何频道中，无法发送消息"
+
 # ── 服务器别名 / Server Aliases ──
 # 格式: qu_an.chat.server.name.<服务器ID>=<显示名称>
 # 未定义别名的服务器将显示原始 ID

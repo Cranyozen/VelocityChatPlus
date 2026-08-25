@@ -50,6 +50,7 @@ public class PlayerListener {
         player.hasPermission("velocitychat.admin.group.settitle");
         player.hasPermission("velocitychat.admin.group.delete");
         player.hasPermission("velocitychat.admin.group.list");
+        player.hasPermission("velocitychat.admin.channel.*");
         player.hasPermission("velocitychat.admin.reload");
         player.hasPermission("velocitychat.broadcast");
         player.hasPermission("velocitychat.invite");
