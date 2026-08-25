@@ -107,6 +107,15 @@ route-chat: true
 #       players (bots) stay visible instead of being wiped on each refresh.
 tablist:
   enabled: true
+  # 是否接管 Tab 顶/底部(header/footer)区域 / Whether to own the header/footer region.
+  # 设为 false 时，将 header/footer 让给后端 —— 如 Carpet 的 /log 会把实时日志
+  #   显示在 Tab 底部，插件再覆盖会造成闪烁；关闭后插件只刷新玩家条目，不动 header/footer。
+  # Set false to hand header/footer over to the backend, e.g. when Carpet /log shows
+  #   live output in the tab footer. The plugin then only refreshes entries (no flicker).
+  manage-header-footer: true
+  # Tab 列表刷新间隔(秒) / Refresh interval for the tab list in seconds
+  # 最小值 1，越大越省资源但更新越慢 / Min 1; higher saves resources but updates slower
+  refresh-interval: 3
   # 顶部标题 / Header ({online} = 在线人数)
   header: "&6&lVelocityChat\n&7在线人数: &a{online}"
   # 底部说明 / Footer

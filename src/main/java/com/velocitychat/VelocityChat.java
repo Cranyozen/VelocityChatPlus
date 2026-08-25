@@ -154,7 +154,7 @@ public class VelocityChat {
                 .plugin(this)
                 .build();
         cmdManager.register(vchatMeta, new VelocityChatCommand(server, groupManager, configManager,
-                forbiddenWordsManager, autoBroadcast, channelManager, logger));
+                forbiddenWordsManager, autoBroadcast, channelManager, tabListManager, logger));
         logger.info("Registered admin command: /velocitychat (/vchat)");
 
         // Register /ch chat channel command (with /channel alias)

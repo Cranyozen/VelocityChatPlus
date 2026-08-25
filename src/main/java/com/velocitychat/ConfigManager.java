@@ -5,8 +5,10 @@ import org.yaml.snakeyaml.Yaml;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 
 /**
@@ -95,6 +97,9 @@ public class ConfigManager {
                 }
             }
         }
+
+        // Append any keys from the built-in default that are missing in the user's config
+        mergeMissingConfig();
 
         return true;
     }
@@ -497,6 +502,39 @@ public class ConfigManager {
         return getTabListEntryFormat();
     }
 
+    /**
+     * Whether the plugin should own the tab list header/footer region.
+     * <p>
+     * Set to {@code false} to hand the header/footer over to the backend — e.g. when
+     * a mod like Carpet displays its live {@code /log} output in the tab footer. The
+     * plugin will then only refresh player entries and never touch header/footer,
+     * avoiding the flicker caused by the proxy racing the backend for that region.
+     */
+    public boolean isTabListManageHeaderFooter() {
+        if (config != null && config.get("tablist") instanceof Map<?, ?> tab) {
+            Object v = tab.get("manage-header-footer");
+            if (v instanceof Boolean b) return b;
+            if (v instanceof String s) return s.equalsIgnoreCase("true");
+        }
+        return true;
+    }
+
+    /**
+     * Get the tab list refresh interval in seconds.
+     * Minimum 1 second to avoid excessive network traffic.
+     */
+    public long getTabListRefreshInterval() {
+        if (config != null && config.get("tablist") instanceof Map<?, ?> tab) {
+            Object v = tab.get("refresh-interval");
+            if (v instanceof Number n) return Math.max(1, n.longValue());
+            if (v instanceof String s) {
+                try { return Math.max(1, Long.parseLong(s.trim())); }
+                catch (NumberFormatException ignored) {}
+            }
+        }
+        return 3L;
+    }
+
     // ── Internal Helpers ─────────────────────────────────────
 
     private boolean getBoolean(String key, boolean def) {
@@ -547,5 +585,224 @@ public class ConfigManager {
             return !messages.isEmpty();
         }
         return false;
+    }
+
+    // ── Auto-merge missing config keys ────────────────────────
+
+    /**
+     * Compare the user's config.yml against the built-in default and append any missing
+     * keys so the file stays up-to-date after a plugin upgrade.  Existing keys and
+     * comments are never modified — only truly new keys are added at the end of their
+     * parent section (or at the file end for new top-level sections).
+     */
+    @SuppressWarnings("unchecked")
+    public void mergeMissingConfig() {
+        Path configFile = dataDirectory.resolve("config.yml");
+        if (!Files.exists(configFile) || config == null) {
+            logger.info("[ConfigMerge] skipped: file exists={}, config loaded={}", Files.exists(configFile), config != null);
+            return;
+        }
+
+        try {
+            // Load the built-in default config as text and as a YAML map
+            String defaultText;
+            try (InputStream in = getClass().getClassLoader().getResourceAsStream("config.yml")) {
+                if (in == null) {
+                    logger.warn("[ConfigMerge] default config.yml not found in resources");
+                    return;
+                }
+                defaultText = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            Yaml yaml = new Yaml();
+            Map<String, Object> defaultMap = yaml.load(defaultText);
+            if (defaultMap == null) {
+                logger.warn("[ConfigMerge] default config.yml parsed as null");
+                return;
+            }
+
+            // Find all missing key paths
+            List<String> missing = new ArrayList<>();
+            findMissingKeys(defaultMap, config, "", missing);
+            logger.info("[ConfigMerge] found {} missing key(s): {}", missing.size(), missing);
+            if (missing.isEmpty()) return;
+
+            // Load the user's config file as lines
+            List<String> userLines = new ArrayList<>(Files.readAllLines(configFile));
+
+            // Build a map: section key -> line index of its last content line
+            Map<String, Integer> sectionEnds = new LinkedHashMap<>();
+            int lastTopKeyIdx = -1;
+            String lastTopKey = null;
+            for (int i = 0; i < userLines.size(); i++) {
+                String line = userLines.get(i);
+                String trimmed = line.stripLeading();
+                boolean isTopKey = !trimmed.isEmpty() && !trimmed.startsWith("#")
+                        && !trimmed.startsWith("-") && line.length() == trimmed.length()
+                        && trimmed.contains(":");
+                if (isTopKey) {
+                    if (lastTopKey != null) {
+                        sectionEnds.put(lastTopKey, lastTopKeyIdx);
+                    }
+                    lastTopKey = trimmed.substring(0, trimmed.indexOf(':')).trim();
+                    lastTopKeyIdx = i;
+                } else if (!trimmed.isEmpty()) {
+                    lastTopKeyIdx = i;
+                }
+            }
+            if (lastTopKey != null) {
+                sectionEnds.put(lastTopKey, lastTopKeyIdx);
+            }
+            logger.info("[ConfigMerge] user section boundaries: {}", sectionEnds);
+
+            // Extract text blocks from the default config
+            Map<String, String> defaultBlocks = extractDefaultBlocks(defaultText);
+            logger.info("[ConfigMerge] extracted {} default block(s): {}", defaultBlocks.size(), defaultBlocks.keySet());
+
+            // Group insertions by position (reverse order so later positions shift first)
+            TreeMap<Integer, List<String>> insertions = new TreeMap<>(Collections.reverseOrder());
+            for (String path : missing) {
+                String textBlock = defaultBlocks.get(path);
+                if (textBlock == null) {
+                    logger.warn("[ConfigMerge] no text block found for missing key '{}'", path);
+                    continue;
+                }
+
+                String sectionKey = path.contains(".") ? path.substring(0, path.indexOf('.')) : path;
+                Integer endIdx = sectionEnds.get(sectionKey);
+                int insertAt;
+                if (endIdx != null) {
+                    insertAt = endIdx + 1;
+                } else {
+                    insertAt = userLines.size();
+                    logger.info("[ConfigMerge] section '{}' not found in user config, appending at end", sectionKey);
+                }
+                insertions.computeIfAbsent(insertAt, k -> new ArrayList<>()).add(textBlock);
+                logger.info("[ConfigMerge] queued '{}' for insertion at line {}", path, insertAt);
+            }
+
+            // Perform insertions
+            for (var entry : insertions.entrySet()) {
+                int idx = entry.getKey();
+                List<String> blocks = entry.getValue();
+                if (idx < userLines.size() && !userLines.get(idx - 1).isBlank()) {
+                    userLines.add(idx, "");
+                    idx++;
+                }
+                int offset = 0;
+                for (String block : blocks) {
+                    for (String bl : block.split("\n", -1)) {
+                        userLines.add(idx + offset, bl);
+                        offset++;
+                    }
+                }
+            }
+
+            Files.writeString(configFile, String.join("\n", userLines));
+            logger.info("[ConfigMerge] wrote {} merged key(s) to config.yml", missing.size());
+        } catch (Exception e) {
+            logger.warn("[ConfigMerge] failed to auto-merge config.yml", e);
+        }
+    }
+
+    /**
+     * Recursively find key paths present in {@code def} but missing from {@code user}.
+     */
+    @SuppressWarnings("unchecked")
+    private void findMissingKeys(Map<String, Object> def, Map<String, Object> user,
+                                 String prefix, List<String> out) {
+        for (var entry : def.entrySet()) {
+            String key = entry.getKey();
+            if (key == null) continue;
+            String path = prefix.isEmpty() ? key : prefix + "." + key;
+            Object defVal = entry.getValue();
+            Object userVal = user.get(key);
+
+            if (userVal == null) {
+                out.add(path);
+            } else if (defVal instanceof Map && userVal instanceof Map) {
+                findMissingKeys((Map<String, Object>) defVal, (Map<String, Object>) userVal, path, out);
+            }
+        }
+    }
+
+    /**
+     * Parse the default config text into text blocks keyed by full YAML path.
+     * Each block includes any preceding comment lines and the key line itself,
+     * preserving the original indentation so it can be directly inserted into
+     * the user's config file.
+     */
+    private static Map<String, String> extractDefaultBlocks(String text) {
+        Map<String, String> blocks = new LinkedHashMap<>();
+        String[] lines = text.split("\n", -1);
+
+        String section = null;
+        List<String> pendingComments = new ArrayList<>();
+        StringBuilder currentBlock = new StringBuilder();
+        String currentPath = null;
+
+        for (String line : lines) {
+            String trimmed = line.stripLeading();
+
+            if (trimmed.isEmpty()) {
+                // Blank line: finalize the current sub-key block if any
+                if (currentPath != null && currentBlock.length() > 0) {
+                    finalizeBlock(blocks, currentPath, pendingComments, currentBlock);
+                }
+                currentPath = null;
+                currentBlock.setLength(0);
+                pendingComments.clear();
+                continue;
+            }
+
+            if (trimmed.startsWith("#")) {
+                pendingComments.add(line);
+                continue;
+            }
+
+            int indent = line.length() - trimmed.length();
+            int colon = trimmed.indexOf(':');
+            if (colon <= 0) {
+                pendingComments.clear();
+                continue;
+            }
+
+            String key = trimmed.substring(0, colon).trim();
+
+            if (indent == 0) {
+                // Top-level key — finalize any previous sub-key, start new section
+                if (currentPath != null && currentBlock.length() > 0) {
+                    finalizeBlock(blocks, currentPath, pendingComments, currentBlock);
+                }
+                section = key;
+                currentPath = null;
+                currentBlock.setLength(0);
+                pendingComments.clear();
+            } else if (section != null) {
+                // Sub-key within a section — finalize previous sub-key, start new
+                if (currentPath != null && currentBlock.length() > 0) {
+                    finalizeBlock(blocks, currentPath, pendingComments, currentBlock);
+                }
+                currentPath = section + "." + key;
+                currentBlock = new StringBuilder();
+                currentBlock.append(line).append("\n");
+                pendingComments.clear();
+            }
+        }
+
+        // Finalize the last sub-key
+        if (currentPath != null && currentBlock.length() > 0) {
+            finalizeBlock(blocks, currentPath, pendingComments, currentBlock);
+        }
+        return blocks;
+    }
+
+    private static void finalizeBlock(Map<String, String> blocks, String path,
+                                      List<String> comments, StringBuilder block) {
+        StringBuilder full = new StringBuilder();
+        for (String c : comments) full.append(c).append("\n");
+        full.append(block);
+        blocks.put(path, full.toString());
+        block.setLength(0);
+        comments.clear();
     }
 }

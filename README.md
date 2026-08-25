@@ -116,7 +116,7 @@ Key settings (all commented in the generated file):
 | `channels-enabled` | `true` | Enable the channel (分区) chat feature |
 | `route-chat` | `true` | Intercept normal chat and route it to the player's active channel |
 | `channels` | — | Preset channels seeded into `channels.yml` on first startup |
-| `tablist` | disabled | Custom TabList: `enabled`, `header`, `footer` (supports `{online}` placeholder), `entry-format` (per-entry text with `{player}`/`{server}`/`{title}`/`{group}` placeholders) and `bot-format` (separate template for Carpet fake players); entries update in place so Carpet bots stay visible |
+| `tablist` | disabled | Custom TabList: `enabled`, `manage-header-footer`, `refresh-interval`, `header`, `footer` (supports `{online}` placeholder), `entry-format` (per-entry text with `{player}`/`{server}`/`{title}`/`{group}` placeholders) and `bot-format` (separate template for Carpet fake players); set `manage-header-footer: false` to hand header/footer to Carpet `/log` and avoid flicker; entries update in place so Carpet bots stay visible |
 | `groups` | — | Preset groups generated on first startup |
 | `messages` | — | Override individual language-file messages (takes priority) |
 

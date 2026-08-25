@@ -24,7 +24,7 @@
 - **服务器别名** — 直接在 `config.yml` 中配置（`服务器ID: "&a显示名称"`），无需再改语言文件
 - **群组称号** — 创建群组并给成员设置称号前缀，显示在聊天中的玩家名前
 - **分区聊天** — 玩家通过 `/ch` 加入不同频道，只有同频道玩家才能互相看到消息（跨服）；频道可设置进入权限并可指定默认频道
-- **自定义 TabList** — 在 `tablist:` 配置节中自定义全代理的 TabList 标题、页脚与玩家条目显示；条目采用原位更新，因此 Carpet 模组的假人会被保留；每个条目的显示文本可通过 `entry-format` 配置，支持 `{player}`/`{server}`/`{title}`/`{group}` 占位符
+- **自定义 TabList** — 在 `tablist:` 配置节中自定义全代理的 TabList 标题、页脚与玩家条目显示；条目采用原位更新，因此 Carpet 模组的假人会被保留；每个条目的显示文本可通过 `entry-format` 配置，支持 `{player}`/`{server}`/`{title}`/`{group}` 占位符；Carpet 假人有独立的 `bot-format` 模板；设置 `manage-header-footer: false` 可将 header/footer 让给 Carpet `/log`，避免闪烁
 - **权限细分** — `velocitychat.admin.*` 子权限节点，可与 LuckPerms 搭配（可选依赖）
 - **广播冷却** — 可选的防刷屏冷却，管理员可绕过
 - **消息可见性** — 进服/切服/离服提示可设为 全体可见 / 仅管理员 / 关闭
@@ -116,7 +116,7 @@
 | `channels-enabled` | `true` | 是否开启分区聊天功能 |
 | `route-chat` | `true` | 是否拦截普通聊天并路由到玩家当前频道 |
 | `channels` | — | 首次启动时生成的预设频道 |
-| `tablist` | 关闭 | 自定义 TabList：`enabled`、`header`、`footer`（支持 `{online}` 占位符）、`entry-format`（每条显示文本，支持 `{player}`/`{server}`/`{title}`/`{group}` 占位符）；条目原位更新，Carpet 假人不会消失 |
+| `tablist` | 关闭 | 自定义 TabList：`enabled`、`manage-header-footer`、`refresh-interval`、`header`、`footer`（支持 `{online}` 占位符）、`entry-format`（每条显示文本，支持 `{player}`/`{server}`/`{title}`/`{group}` 占位符）与 `bot-format`（Carpet 假人单独模板）；条目原位更新，Carpet 假人不会消失；设 `manage-header-footer: false` 将 header/footer 让给 Carpet `/log` 以免闪烁 |
 | `groups` | — | 首次启动时生成的预设群组 |
 | `messages` | — | 覆盖语言文件中的指定消息（优先级更高） |
 

@@ -243,15 +243,17 @@ public class TabListManager {
     }
 
     /**
-     * Start the background refresh loop.
+     * Start (or restart) the background refresh loop with the current config interval.
      */
     public void start() {
-        if (task != null) return;
+        stop();
+        long interval = config.getTabListRefreshInterval();
         task = server.getScheduler()
                 .buildTask(plugin, this::refresh)
-                .repeat(3L, TimeUnit.SECONDS)
+                .repeat(interval, TimeUnit.SECONDS)
                 .schedule();
-        logger.info("Custom TabList task started (enabled={}, Carpet bot compatible)", config.isTabListEnabled());
+        logger.info("Custom TabList task started (enabled={}, interval={}s, manage-header-footer={})",
+                config.isTabListEnabled(), interval, config.isTabListManageHeaderFooter());
     }
 
     /**

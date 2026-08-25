@@ -31,17 +31,19 @@ public class VelocityChatCommand implements SimpleCommand {
     private final ForbiddenWordsManager forbiddenWords;
     private final AutoBroadcast autoBroadcast;
     private final ChannelManager channelManager;
+    private final TabListManager tabListManager;
     private final Logger logger;
 
     public VelocityChatCommand(ProxyServer server, GroupManager groupManager, ConfigManager config,
                                ForbiddenWordsManager forbiddenWords, AutoBroadcast autoBroadcast,
-                               ChannelManager channelManager, Logger logger) {
+                               ChannelManager channelManager, TabListManager tabListManager, Logger logger) {
         this.server = server;
         this.groupManager = groupManager;
         this.config = config;
         this.forbiddenWords = forbiddenWords;
         this.autoBroadcast = autoBroadcast;
         this.channelManager = channelManager;
+        this.tabListManager = tabListManager;
         this.logger = logger;
     }
 
@@ -395,7 +397,8 @@ public class VelocityChatCommand implements SimpleCommand {
         channelManager.load(config);
         autoBroadcast.load();
         autoBroadcast.start();
-        ColorUtils.sendMessage(source, logger, "§a配置文件、语言文件、群组、频道、违禁词列表及定时消息已重载！");
+        tabListManager.start();
+        ColorUtils.sendMessage(source, logger, "§a配置文件、语言文件、群组、频道、违禁词列表、定时消息及 TabList 已重载！");
         logger.info("Configuration, groups, channels, forbidden words and auto broadcast reloaded by " + source);
     }
 
