@@ -1,0 +1,59 @@
+# ── 简体中文语言文件 / Chinese Simplified Language File ──
+
+# 群组名称 / Proxy Name
+qu_an.chat.proxy.name: "§2群组"
+
+# ── 服务器连接/切换/离开消息 ──
+# {0}: 玩家名 / player name
+# {1}: 服务器名称 / server name
+# {2}: 旧服务器名称 / old server name (仅用于切换 / switch only)
+
+# 加入服务器
+qu_an.chat.message.connected: "§8[§2+§8]§r {0} §2加入了 §r{1}"
+
+# 切换服务器
+qu_an.chat.message.server_switch: "§8[§b⇄§8]§r {0} §2从 §r{1} §2切换到了 §r{2}"
+
+# 离开服务器
+qu_an.chat.message.disconnect: "§8[§c-§8]§r {0} §2离开了 §r{1}"
+
+# ── 聊天消息格式 ──
+# {0}: 群组名称 / proxy name
+# {1}: 服务器名称 / server name
+# {2}: 玩家名 / player name
+# {3}: 聊天内容 / chat message
+qu_an.chat.message.chat.default: "§8[§r{0}§8][§r{1}§8]§r<{2}§r> {3}"
+
+# 跨服广播消息格式
+# {0}: 玩家名, {1}: 服务器名, {2}: 聊天内容
+qu_an.chat.message.broadcast: "§d[跨服聊天]§r[{1}§r]§r{0} §7>>§f {2}"
+
+# ── 跨服邀请消息 / Server Invite Messages ──
+# {0}: 邀请者玩家名, {1}: 服务器显示名称 / inviter name, server display name
+# 邀请文本（点击"点击加入"可进入该服务器）
+qu_an.chat.message.invite: "§d[邀请] §r{0} §7邀请你加入服务器 §r{1}"
+# "点击加入"按钮文字 / Join button label
+qu_an.chat.message.invite.click: "§a§l[点击加入]"
+# 悬停在按钮上时显示的文字 / Hover text on the join button
+# ({0} = 邀请者玩家名, {1} = 服务器显示名称)
+qu_an.chat.message.invite.hover: "§7点击进入 §r{1}"
+# 冷却提示 / Cooldown message ({0} = remaining seconds)
+qu_an.chat.message.invite.cooldown: "§c请等待 {0} 秒后再发起邀请"
+# 仅玩家可用 / Players-only message
+qu_an.chat.message.invite.console: "§c只有玩家可以使用此命令"
+# 玩家未连接到任何服务器 / Player not on a server
+qu_an.chat.message.invite.no_server: "§c你当前不在任何服务器中，无法发起邀请"
+
+# ── 违禁词检测 / Forbidden Word Filter ──
+# 消息包含违禁词被拦截 / Message blocked by the forbidden-word filter
+qu_an.chat.message.filter.blocked: "§c你的消息包含违禁词，已被拦截！"
+
+# ── 服务器别名 / Server Aliases ──
+# 格式: qu_an.chat.server.name.<服务器ID>=<显示名称>
+# 未定义别名的服务器将显示原始 ID
+qu_an.chat.server.name.lobby: "§6登录服"
+qu_an.chat.server.name.survival: "§a生存服"
+qu_an.chat.server.name.minigame: "§b小游戏服"
+qu_an.chat.server.name.factions: "§c战争服"
+qu_an.chat.server.name.skyblock: "§d空岛服"
+qu_an.chat.server.name.creative: "§e创造服"
