@@ -448,6 +448,20 @@ public class ConfigManager {
     }
 
     /**
+     * Get the route-chat mode.
+     * Values: "channel" (deny backend, only channel format),
+     *         "both" (no deny, both formats — duplicate for same-server),
+     *         "channel-log" (deny backend + log to proxy console)
+     */
+    public String getRouteChatMode() {
+        if (config != null && config.containsKey("route-chat-mode")) {
+            Object v = config.get("route-chat-mode");
+            if (v != null) return v.toString();
+        }
+        return "both";
+    }
+
+    /**
      * Whether normal player chat is routed through the proxy into the
      * player's active channel. When disabled, only {@code /ch <message>}
      * sends to a channel and normal chat goes straight to the backend.

@@ -40,9 +40,26 @@ public class ChatRouter {
         var channelOpt = channels.getPlayerChannel(player);
         if (channelOpt.isEmpty()) return;
 
-        // Broadcast to the cross-server channel. Do NOT deny the event — let the
-        // message also reach the backend server so its console / logs show the chat.
-        channelCommand.sendToChannel(player, message);
+        String mode = config.getRouteChatMode().trim();
+        logger.info("[ChatRouter] mode='{}' sendToSender={}", mode, !"channel-cross".equals(mode));
+
+        switch (mode) {
+            case "channel":
+                event.setResult(PlayerChatEvent.ChatResult.denied());
+                break;
+            case "channel-log":
+                event.setResult(PlayerChatEvent.ChatResult.denied());
+                logger.info("<{}> {}", player.getUsername(), message);
+                break;
+            case "channel-cross":
+                break;
+            case "both":
+            default:
+                break;
+        }
+
+        boolean sendToSender = !"channel-cross".equals(mode);
+        channelCommand.sendToChannel(player, message, sendToSender);
     }
 
     /**

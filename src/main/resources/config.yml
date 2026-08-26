@@ -112,6 +112,16 @@ channels-enabled: true
 # Whether to intercept normal chat and route it into the player's active channel
 # (when false, only /ch <message> sends to a channel and normal chat goes to the backend)
 route-chat: true
+# 聊天路由模式 / Chat route mode (only when route-chat is true)
+#   channel       — 拦截后端聊天，只显示频道格式（后端收不到消息）
+#                  Deny backend chat, only channel format visible
+#   channel-log   — 拦截后端聊天，显示频道格式，同时记录到代理控制台
+#                  Deny backend chat, channel format + log to proxy console
+#   channel-cross — 同服看后端原版聊天，跨服看频道格式（无重复）
+#                  Same-server: backend format; cross-server: channel format; no duplicate
+#   both          — 不拦截，后端和频道都显示（同服会看到两条）
+#                  Don't deny, both formats shown (duplicate for same-server)
+route-chat-mode: channel-cross
 
 # 频道列表（仅首次启动时生成 channels.yml 使用，之后在 channels.yml 或 /vchat channel 中管理）
 # 如果你想在首次配置时预设频道，取消下方注释 / Uncomment to preset channels on first startup

@@ -131,7 +131,7 @@ public class TabListManager {
             // real player whose UUID couldn't be matched above).
             Set<String> presentNames = new HashSet<>();
 
-            logger.info("[TabList] viewer '{}' viewers='{}' online='{}' proxy-remembered='{}'",
+            logger.debug("[TabList] viewer '{}' viewers='{}' online='{}' proxy-remembered='{}'",
                     viewer.getUsername(), viewerId, byProfileId.size(), added);
 
             for (TabListEntry entry : tab.getEntries()) {
@@ -151,20 +151,20 @@ public class TabListManager {
                     presentNames.add(target.getUsername().toLowerCase());
                     entry.setDisplayName(entryComponent(target));
                     entry.setLatency(ping(target));
-                    logger.info("[TabList]   entry id='{}' name='{}' dsp='{}' -> ONLINE '{}'",
+                    logger.debug("[TabList]   entry id='{}' name='{}' dsp='{}' -> ONLINE '{}'",
                             id, entryName, dsp, target.getUsername());
                 } else if (added.contains(id)) {
                     // Cross-server player we injected who has since disconnected
                     tab.removeEntry(id);
                     added.remove(id);
                     present.remove(id);
-                    logger.info("[TabList]   entry id='{}' name='{}' dsp='{}' -> REMOVED (our cross-server, now offline)",
+                    logger.debug("[TabList]   entry id='{}' name='{}' dsp='{}' -> REMOVED (our cross-server, now offline)",
                             id, entryName, dsp);
                 } else {
                     // Backend-injected entry (Carpet bot or stale leftover) — apply
                     // the bot-specific format so bots are visually distinct.
                     entry.setDisplayName(botComponent(viewer, entryName));
-                    logger.info("[TabList]   entry id='{}' name='{}' dsp='{}' -> KEPT (bot, styled)",
+                    logger.debug("[TabList]   entry id='{}' name='{}' dsp='{}' -> KEPT (bot, styled)",
                             id, entryName, dsp);
                 }
             }
@@ -178,13 +178,13 @@ public class TabListManager {
                         entryComponent(other), ping(other), 0));
                 added.add(id);
                 presentNames.add(other.getUsername().toLowerCase());
-                logger.info("[TabList]   ADD id='{}' name='{}' (missing)",
+                logger.debug("[TabList]   ADD id='{}' name='{}' (missing)",
                         id, other.getUsername());
             }
 
             // After the pass: report the exact set of profile ids now tracked for this viewer,
             // including any duplicates (same id appearing more than once) — that is the symptom.
-            logger.info("[TabList] viewer '{}' final-pids='{}' remembered='{}'",
+            logger.debug("[TabList] viewer '{}' final-pids='{}' remembered='{}'",
                     viewer.getUsername(), present, added);
         } catch (Exception e) {
             logger.debug("Failed to update tab list for {}", viewer.getUsername(), e);

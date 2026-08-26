@@ -133,6 +133,10 @@ public class ChannelChatCommand implements SimpleCommand {
      * Compose and deliver a chat message to the player's active channel.
      */
     void sendToChannel(Player player, String rawMessage) {
+        sendToChannel(player, rawMessage, true);
+    }
+
+    void sendToChannel(Player player, String rawMessage, boolean sendToSender) {
         var opt = channels.getPlayerChannel(player);
         if (opt.isEmpty()) {
             player.sendMessage(Component.text(config.getMessage("ch.no_channel")));
@@ -175,7 +179,7 @@ public class ChannelChatCommand implements SimpleCommand {
                 .replace("{2}", serverName)
                 .replace("{3}", content);
 
-        channels.broadcastToChannel(channel.getId(), formatted, false, player);
+        channels.broadcastToChannel(channel.getId(), formatted, sendToSender, player);
         logger.info(ColorUtils.toAnsi(formatted));
     }
 
