@@ -105,13 +105,19 @@ public class TabListManager {
             if (headerRaw != null) {
                 String serverName = serverLabel(viewer);
                 String playerPing = String.valueOf(ping(viewer));
-                Component header = Component.text(ColorUtils.translate(
-                        headerRaw.replace("{server}", serverName)
-                                .replace("{ping}", playerPing)));
-                Component footer = Component.text(ColorUtils.translate(
-                        footerRaw.replace("{server}", serverName)
-                                .replace("{ping}", playerPing)));
-                tab.setHeaderAndFooter(header, footer);
+
+                String h = headerRaw.replace("{server}", serverName)
+                        .replace("{ping}", playerPing);
+                String f = footerRaw.replace("{server}", serverName)
+                        .replace("{ping}", playerPing);
+
+                boolean hEmpty = h.isBlank();
+                boolean fEmpty = f.isBlank();
+                if (!hEmpty || !fEmpty) {
+                    Component header = hEmpty ? Component.empty() : Component.text(ColorUtils.translate(h));
+                    Component footer = fEmpty ? Component.empty() : Component.text(ColorUtils.translate(f));
+                    tab.setHeaderAndFooter(header, footer);
+                }
             }
 
             // Remembered cross-server entries we added for this viewer

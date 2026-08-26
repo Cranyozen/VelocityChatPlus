@@ -256,6 +256,38 @@ public class ConfigManager {
         return getMessage("qu_an.chat.proxy.name");
     }
 
+    /**
+     * Get the personal notification message when a player joins the proxy.
+     * Placeholders: {player}=player name, {server}=server display name
+     */
+    public String getJoinProxyMessage() {
+        if (config != null && config.containsKey("join-proxy-message")) {
+            Object v = config.get("join-proxy-message");
+            if (v != null && !v.toString().isBlank()) return v.toString();
+        }
+        return "§a欢迎来到服务器！你当前在 {server}";
+    }
+
+    /**
+     * Get the personal notification message when a player joins a backend server.
+     * Supports per-server override: join-server-messages.{serverId}
+     * Placeholders: {player}=player name, {server}=server display name
+     */
+    public String getJoinServerMessage(String serverId) {
+        // Check per-server override first
+        if (serverId != null && config != null
+                && config.get("join-server-messages") instanceof Map<?, ?> map) {
+            Object v = map.get(serverId);
+            if (v != null && !v.toString().isBlank()) return v.toString();
+        }
+        // Fall back to global default
+        if (config != null && config.containsKey("join-server-message")) {
+            Object v = config.get("join-server-message");
+            if (v != null && !v.toString().isBlank()) return v.toString();
+        }
+        return "§a你已进入 §e{server}";
+    }
+
 /**
      * Get the channel chat message format.
      * Config key: {@code channel-format}.
@@ -433,16 +465,6 @@ public class ConfigManager {
             return map;
         }
         return null;
-    }
-
-    /**
-     * Get the channel chat message format.
-     * <p>
-     * Placeholders: {0}=channel, {1}=player, {2}=server, {3}=message
-     */
-    public String getChannelFormat() {
-        return messages.getOrDefault("qu_an.chat.message.channel",
-                "§d[§6{0}§d]§r[{1}§r]§r{2} §7>>§f {3}");
     }
 
     // ── 自定义 TabList ───────────────────────────────────────

@@ -4,6 +4,7 @@ import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.PostOrder;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.player.ServerConnectedEvent;
+import com.velocitypowered.api.event.player.ServerPostConnectEvent;
 import com.velocitypowered.api.event.player.KickedFromServerEvent;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
@@ -92,6 +93,46 @@ public class PlayerListener {
             );
 
             broadcastMessage(joinMsg);
+        }
+    }
+
+    /**
+     * Fires AFTER the player has fully connected to the backend server.
+     * This is the reliable place to send personal notifications — the client
+     * is guaranteed to be ready to receive messages.
+     */
+    @Subscribe(order = PostOrder.LATE)
+    public void onPostConnect(ServerPostConnectEvent event) {
+        Player player = event.getPlayer();
+        String currentName = player.getCurrentServer()
+                .map(s -> s.getServerInfo().getName())
+                .orElse(null);
+        String displayName = currentName != null
+                ? config.getServerDisplayName(currentName)
+                : "§7Proxy";
+
+        RegisteredServer previousServer = event.getPreviousServer();
+
+        if (previousServer != null) {
+            // Player switched servers — send server-specific notification
+            String joinServerMsg = config.getJoinServerMessage(currentName)
+                    .replace("{server}", displayName)
+                    .replace("{player}", player.getUsername());
+            logger.info("[JoinNotify] Sending join-server to {}: {}", player.getUsername(), joinServerMsg);
+            player.sendMessage(Component.text(ColorUtils.translate(joinServerMsg)));
+        } else {
+            // Player joined the proxy for the first time — send both
+            String joinProxyMsg = config.getJoinProxyMessage()
+                    .replace("{server}", displayName)
+                    .replace("{player}", player.getUsername());
+            logger.info("[JoinNotify] Sending join-proxy to {}: {}", player.getUsername(), joinProxyMsg);
+            player.sendMessage(Component.text(ColorUtils.translate(joinProxyMsg)));
+
+            String joinServerMsg = config.getJoinServerMessage(currentName)
+                    .replace("{server}", displayName)
+                    .replace("{player}", player.getUsername());
+            logger.info("[JoinNotify] Sending join-server to {}: {}", player.getUsername(), joinServerMsg);
+            player.sendMessage(Component.text(ColorUtils.translate(joinServerMsg)));
         }
     }
 

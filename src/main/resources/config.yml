@@ -91,6 +91,16 @@ server-aliases:
 #   admin — 仅管理员可见（需 velocitychat.admin 权限） / Admins only
 #   none  — 关闭通知 / Disabled
 notify-mode: all
+# 进服个人通知 / Personal join notification (sent only to the joining player)
+# 进入代理时发送 / Sent when player joins the proxy
+# 占位符: {player}=玩家名, {server}=服务器显示名
+join-proxy-message: "§a欢迎来到服务器！你当前在 §e{server}"
+# 进入子服务器时发送 / Sent when player joins a backend server
+join-server-message: "§a你已进入 §e{server}"
+# 分服务器自定义（可选，不配置则用上面的默认消息）/ Per-server overrides (optional)
+# join-server-messages:
+#   lobby: "§a欢迎来到登录服！"
+#   survival: "§a你已进入 §6生存服"
 
 # ── 分区聊天 / Chat Channels ───────────────────────────────
 # 玩家可以加入不同频道，只有同频道玩家才能看到彼此的发言（跨服）
