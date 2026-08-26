@@ -6,6 +6,7 @@
 #   {title}   - 群组称号(无称号时为空) / group title (empty if none)
 #   {server}  - 服务器显示名 / server display name (from server-aliases)
 #   {message} - 聊天内容 / chat message
+#   {ping}    - 玩家延迟(ms) / player ping in ms
 #   {online}  - 在线人数 (仅 header/footer) / online count (header/footer only)
 #   {channel} - 频道名 (仅频道格式) / channel name (channel format only)
 # 颜色字符: § (e.g. §a, §c, §6, §l, §r)
@@ -40,6 +41,7 @@ broadcast-cooldown-bypass: false
 #   {title}   - 群组称号(无称号时为空) / group title (empty if none)
 #   {server}  - 服务器显示名 / server display name (from server-aliases)
 #   {message} - 聊天内容 / chat message
+#   {ping}    - 玩家延迟(ms) / player ping in ms
 #   {online}  - 在线人数 (仅 header/footer) / online count (header/footer only)
 #   {channel} - 频道名 (仅频道格式) / channel name (channel format only)
 # 跨服广播消息格式 / Broadcast message format

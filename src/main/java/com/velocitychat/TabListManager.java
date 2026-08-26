@@ -104,10 +104,13 @@ public class TabListManager {
             // Only own the header/footer region when manage-header-footer is on
             if (headerRaw != null) {
                 String serverName = serverLabel(viewer);
+                String playerPing = String.valueOf(ping(viewer));
                 Component header = Component.text(ColorUtils.translate(
-                        headerRaw.replace("{server}", serverName)));
+                        headerRaw.replace("{server}", serverName)
+                                .replace("{ping}", playerPing)));
                 Component footer = Component.text(ColorUtils.translate(
-                        footerRaw.replace("{server}", serverName)));
+                        footerRaw.replace("{server}", serverName)
+                                .replace("{ping}", playerPing)));
                 tab.setHeaderAndFooter(header, footer);
             }
 
@@ -198,7 +201,7 @@ public class TabListManager {
         String title = groupManager.getPlayerTitle(player.getUsername());
         String group = groupManager.getPlayerGroup(player.getUsername());
         return Component.text(formatEntry(config.getTabListEntryFormat(),
-                serverLabel(player), player.getUsername(), title, group));
+                serverLabel(player), player.getUsername(), title, group, ping(player)));
     }
 
     /**
@@ -210,13 +213,14 @@ public class TabListManager {
         String title = groupManager.getPlayerTitle(botName);
         String group = groupManager.getPlayerGroup(botName);
         return Component.text(formatEntry(config.getTabListBotFormat(),
-                serverLabel(viewer), botName, title, group));
+                serverLabel(viewer), botName, title, group, 0));
     }
 
     /**
      * Substitute the placeholders of the given format template and translate color codes.
      */
-    private String formatEntry(String format, String server, String player, String title, String group) {
+    private String formatEntry(String format, String server, String player,
+                               String title, String group, int ping) {
         String t = (title == null || title.isBlank()) ? "" : ColorUtils.translate(title);
         String g = (group == null || group.isBlank()) ? "" : group;
         String name = player == null ? "" : player;
@@ -225,7 +229,8 @@ public class TabListManager {
                 .replace("{server}", s)
                 .replace("{player}", name)
                 .replace("{title}", t)
-                .replace("{group}", g));
+                .replace("{group}", g)
+                .replace("{ping}", String.valueOf(ping)));
     }
 
     /**

@@ -149,9 +149,10 @@ public class ChannelChatCommand implements SimpleCommand {
             return;
         }
 
-        // Sender display name and title
+        // Sender display name, title and ping
         String senderName = player.getUsername();
         String title = groups.getPlayerTitle(player.getUsername());
+        int ping = (int) Math.max(0, Math.min(Integer.MAX_VALUE, player.getPing()));
 
         String serverName = "§7Proxy";
         if (player.getCurrentServer().isPresent()) {
@@ -167,6 +168,7 @@ public class ChannelChatCommand implements SimpleCommand {
                 .replace("{title}", title)
                 .replace("{server}", serverName)
                 .replace("{message}", content)
+                .replace("{ping}", String.valueOf(ping))
                 // Legacy numbered placeholders (backward compat)
                 .replace("{0}", channel.displayName())
                 .replace("{1}", title + senderName)

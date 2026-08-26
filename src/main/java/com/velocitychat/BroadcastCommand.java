@@ -86,10 +86,12 @@ public class BroadcastCommand implements SimpleCommand {
         String senderName;
         String serverName = "§7Proxy";
         String title = "";
+        int ping = 0;
 
         if (source instanceof Player player) {
             senderName = player.getUsername();
             title = groupManager.getPlayerTitle(player.getUsername());
+            ping = (int) Math.max(0, Math.min(Integer.MAX_VALUE, player.getPing()));
 
             if (player.getCurrentServer().isPresent()) {
                 String rawServerId = player.getCurrentServer().get().getServerInfo().getName();
@@ -109,6 +111,7 @@ public class BroadcastCommand implements SimpleCommand {
                 .replace("{title}", title)
                 .replace("{server}", serverName)
                 .replace("{message}", formattedMessage)
+                .replace("{ping}", String.valueOf(ping))
                 // Legacy numbered placeholders (backward compat)
                 .replace("{0}", title + senderName)
                 .replace("{1}", serverName)
