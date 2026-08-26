@@ -75,14 +75,14 @@ public class TabListManager {
         // Header/footer are only owned by the plugin when manage-header-footer is on.
         // When off (e.g. Carpet /log owns the tab footer), pass null so refreshViewer
         // never writes or clears header/footer and the backend keeps them.
-        Component header = null;
-        Component footer = null;
+        // Header/footer with {online} replaced but {server} left as token
+        // for per-viewer resolution in refreshViewer.
+        String headerRaw = null;
+        String footerRaw = null;
         if (manage) {
             int online = server.getAllPlayers().size();
-            header = Component.text(ColorUtils.translate(
-                    config.getTabListHeader().replace("{online}", String.valueOf(online))));
-            footer = Component.text(ColorUtils.translate(
-                    config.getTabListFooter().replace("{online}", String.valueOf(online))));
+            headerRaw = config.getTabListHeader().replace("{online}", String.valueOf(online));
+            footerRaw = config.getTabListFooter().replace("{online}", String.valueOf(online));
         }
 
         // Snapshot of real online players, sorted by server then name
@@ -93,17 +93,21 @@ public class TabListManager {
         });
 
         for (Player viewer : allPlayers) {
-            refreshViewer(viewer, header, footer, allPlayers);
+            refreshViewer(viewer, headerRaw, footerRaw, allPlayers);
         }
     }
 
-    private void refreshViewer(Player viewer, Component header, Component footer, List<Player> allPlayers) {
+    private void refreshViewer(Player viewer, String headerRaw, String footerRaw, List<Player> allPlayers) {
         var tab = viewer.getTabList();
         UUID viewerId = viewer.getUniqueId();
         try {
             // Only own the header/footer region when manage-header-footer is on
-            // (header is null when the plugin handed that region to the backend).
-            if (header != null) {
+            if (headerRaw != null) {
+                String serverName = serverLabel(viewer);
+                Component header = Component.text(ColorUtils.translate(
+                        headerRaw.replace("{server}", serverName)));
+                Component footer = Component.text(ColorUtils.translate(
+                        footerRaw.replace("{server}", serverName)));
                 tab.setHeaderAndFooter(header, footer);
             }
 

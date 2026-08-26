@@ -149,10 +149,9 @@ public class ChannelChatCommand implements SimpleCommand {
             return;
         }
 
-        // Sender display name (with group title)
+        // Sender display name and title
         String senderName = player.getUsername();
         String title = groups.getPlayerTitle(player.getUsername());
-        if (!title.isEmpty()) senderName = title + " " + senderName;
 
         String serverName = "§7Proxy";
         if (player.getCurrentServer().isPresent()) {
@@ -162,8 +161,15 @@ public class ChannelChatCommand implements SimpleCommand {
         String content = ColorUtils.translate(rawMessage);
         String format = config.getChannelFormat();
         String formatted = format
+                // Semantic placeholders (new)
+                .replace("{channel}", channel.displayName())
+                .replace("{player}", senderName)
+                .replace("{title}", title)
+                .replace("{server}", serverName)
+                .replace("{message}", content)
+                // Legacy numbered placeholders (backward compat)
                 .replace("{0}", channel.displayName())
-                .replace("{1}", senderName)
+                .replace("{1}", title + senderName)
                 .replace("{2}", serverName)
                 .replace("{3}", content);
 

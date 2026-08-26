@@ -85,17 +85,12 @@ public class BroadcastCommand implements SimpleCommand {
         // Get the sender's display name
         String senderName;
         String serverName = "§7Proxy";
+        String title = "";
 
         if (source instanceof Player player) {
             senderName = player.getUsername();
+            title = groupManager.getPlayerTitle(player.getUsername());
 
-            // Check if player has a group title to prepend
-            String title = groupManager.getPlayerTitle(player.getUsername());
-            if (!title.isEmpty()) {
-                senderName = title + " " + senderName;
-            }
-
-            // Include the player's current server name if available
             if (player.getCurrentServer().isPresent()) {
                 String rawServerId = player.getCurrentServer().get().getServerInfo().getName();
                 serverName = config.getServerDisplayName(rawServerId);
@@ -104,14 +99,18 @@ public class BroadcastCommand implements SimpleCommand {
             senderName = "§c§lConsole";
         }
 
-        // Translate color codes in the message
         String formattedMessage = ColorUtils.translate(rawMessage);
 
-        // Build the broadcast format
-        // Format: proxy/server/player: message
+        // Build the broadcast format using semantic placeholders
         String broadcastFormat = config.getBroadcastFormat();
         String fullMessage = broadcastFormat
-                .replace("{0}", senderName)
+                // Semantic placeholders (new)
+                .replace("{player}", senderName)
+                .replace("{title}", title)
+                .replace("{server}", serverName)
+                .replace("{message}", formattedMessage)
+                // Legacy numbered placeholders (backward compat)
+                .replace("{0}", title + senderName)
                 .replace("{1}", serverName)
                 .replace("{2}", formattedMessage);
 

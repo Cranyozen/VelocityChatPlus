@@ -258,7 +258,8 @@ public class ConfigManager {
 
 /**
      * Get the channel chat message format.
-     * Config key: {@code channel-format}. Placeholders: {0}=channel, {1}=player, {2}=server, {3}=message
+     * Config key: {@code channel-format}.
+     * Placeholders: {channel}=channel, {player}=sender, {title}=group title, {server}=server, {message}=message
      */
     public String getChannelFormat() {
         if (config != null && config.containsKey("channel-format")) {
@@ -266,12 +267,13 @@ public class ConfigManager {
             if (v != null && !v.toString().isBlank()) return v.toString();
         }
         return messages.getOrDefault("qu_an.chat.message.channel",
-                "§d[§6{0}§d]§r[{1}§r]§r{2} §7>>§f {3}");
+                "§d[§6{channel}§d]§r[{title}{player}§r]§r{server} §7>>§f {message}");
     }
 
     /**
      * Get the broadcast message format.
-     * Config key: {@code broadcast-format}. Placeholders: {0}=sender, {1}=server, {2}=message
+     * Config key: {@code broadcast-format}.
+     * Placeholders: {player}=sender, {title}=group title, {server}=server, {message}=message
      */
     public String getBroadcastFormat() {
         if (config != null && config.containsKey("broadcast-format")) {
@@ -279,7 +281,7 @@ public class ConfigManager {
             if (v != null && !v.toString().isBlank()) return v.toString();
         }
         return messages.getOrDefault("qu_an.chat.message.broadcast",
-                "§6[Broadcast] §r{0}§f: {1}");
+                "§6[Broadcast] §r{title}{player}§f: §7[{server}]§f {message}");
     }
 
     /**
@@ -477,7 +479,8 @@ public class ConfigManager {
             Object f = tab.get("footer");
             if (f != null && !f.toString().isBlank()) return f.toString();
         }
-        return "&7在线 &a{online} &r&7人";
+        // return "&7在线 &a{online} &r&7人";
+        return "";
     }
 
     /**
