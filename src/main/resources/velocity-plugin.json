@@ -1,8 +1,8 @@
 {
     "id": "velocity-chat",
-    "name": "VelocityChat",
+    "name": "VelocityChatPlus",
     "version": "2.2.0",
     "description": "Cross-server proxy chat plugin — broadcast, join/switch/leave messages, server invites, forbidden-word filter, timed announcements, channel chat, custom TabList, server aliases",
-    "authors": ["YuHongChen(LiquidTeam) QQ:1464670605"],
+    "authors": ["Cranyozen", "YuHongChen(LiquidTeam) QQ:1464670605"],
     "main": "com.velocitychat.VelocityChat"
 }
