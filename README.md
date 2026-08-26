@@ -21,21 +21,25 @@ Chat together across your entire server network. Install **only on the Velocity 
 - **Timed announcements** — schedule announcements by clock time with daily / weekly / monthly / one-shot recurrence, or loop on an interval like `30min` (configured in `auto_broadcast.yml`)
 - **Color codes** — full `&` color code support (`&c`, `&6`, `&l`, `&r`, …)
 - **Join / switch / leave announcements** — automatic messages when players join, switch servers, or disconnect
+- **Personal join notifications** — send a welcome message only to the joining player when they enter the proxy or a backend server (`join-proxy-message`, `join-server-message`, per-server overrides)
 - **Server aliases** — show friendly names like "登录服" instead of raw server IDs, configured directly in `config.yml` (`serverId: "&aDisplayName"`)
 - **Group titles** — create groups and assign title prefixes shown before player names in chat
 - **Chat channels** — partitioned (分区) cross-server chat: players join a channel with `/ch` and only members of the same channel see each other's messages; channels can be permission-gated and one is the default
-- **Custom TabList** — override header, footer and player entries across the network (configured in the `tablist:` section); entries are updated in place so backend-injected entries like Carpet fake players (bots) stay visible; each entry's display text is customizable via `entry-format` with `{player}`/`{server}`/`{title}`/`{group}` placeholders, and Carpet fake players get their own `bot-format` template
+- **Flexible chat routing** — configurable `route-chat-mode`: show only channel format, only backend format, or both; compatible with MCDR and backend logging
+- **Custom TabList** — override header, footer and player entries across the network (configured in the `tablist:` section); entries are updated in place so backend-injected entries like Carpet fake players (bots) stay visible; each entry's display text is customizable via `entry-format` with `{player}`/`{server}`/`{title}`/`{group}`/`{ping}` placeholders, and Carpet fake players get their own `bot-format` template; set `manage-header-footer: false` to hand header/footer to Carpet `/log` and avoid flicker
+- **Customizable message formats** — all chat formats (`broadcast-format`, `channel-format`) and TabList entries support semantic placeholders: `{player}`, `{title}`, `{server}`, `{message}`, `{channel}`, `{ping}`, `{online}`, `{group}`
 - **Granular permissions** — `velocitychat.admin.*` sub-nodes, works with LuckPerms (optional dependency)
 - **Broadcast cooldown** — optional anti-spam cooldown, admins can bypass
 - **Message visibility** — join/switch/leave alerts can be shown to everyone, admins only, or disabled
 - **Bilingual** — built-in `zh_CN` (Simplified Chinese) and `en_US` (English) language files, switchable at runtime
+- **Auto-merge config** — new config keys from plugin updates are automatically appended to your existing `config.yml`
 
 ## Requirements
 
 | Requirement | Version |
 |---|---|
 | Java | 17+ |
-| Proxy | Velocity 3.x (all modern versions) |
+| Proxy | Velocity 3.x / 4.x (all modern versions) |
 | Optional | A permissions plugin (e.g. [LuckPerms](https://luckperms.net)) for granular admin permissions |
 
 ## Installation
@@ -96,6 +100,21 @@ Titles support `&` color codes, e.g. `/vchat create group admin &c&l[Admin]`.
 
 > **Tip:** LuckPerms example — `/lpv user <player> permission set velocitychat.admin true`
 
+## Placeholder Reference
+
+All formats support these semantic placeholders:
+
+| Placeholder | Description | Available in |
+|---|---|---|
+| `{player}` | Player name | broadcast, channel, tablist |
+| `{title}` | Group title (empty if player has no group) | broadcast, channel, tablist |
+| `{server}` | Server display name (from `server-aliases`) | broadcast, channel, tablist, header/footer |
+| `{message}` | Chat message content | broadcast, channel |
+| `{channel}` | Channel display name | channel |
+| `{ping}` | Player ping in ms | broadcast, channel, tablist, header/footer |
+| `{online}` | Online player count | header/footer |
+| `{group}` | Group name | tablist |
+
 ## Configuration (`config.yml`)
 
 Key settings (all commented in the generated file):
@@ -106,6 +125,8 @@ Key settings (all commented in the generated file):
 | `broadcast-aliases` | `br`, `broadcast` | Aliases for the cross-server broadcast command |
 | `broadcast-cooldown` | `0` | Seconds between `/br` uses (`0` = no cooldown) |
 | `broadcast-cooldown-bypass` | `false` | When enabled, `velocitychat.admin` players ignore the cooldown |
+| `broadcast-format` | `§6[Broadcast] §r{title}{player}§f: §7[{server}]§f {message}` | Cross-server broadcast message format |
+| `channel-format` | `§d[§6{channel}§d]§r[{title}{player}§r]§r{server} §7>>§f {message}` | Channel chat message format |
 | `invite-cooldown` | `30` | Seconds between `/yq` invites (`0` = no cooldown) |
 | `invite-cooldown-bypass` | `false` | When enabled, players with `invite-bypass-permission` ignore the invite cooldown |
 | `invite-bypass-permission` | `velocitychat.admin` | Permission that bypasses the invite cooldown |
@@ -113,12 +134,27 @@ Key settings (all commented in the generated file):
 | `forbidden-words-bypass-permission` | `velocitychat.admin` | Permission that bypasses the forbidden-word filter |
 | `server-aliases` | map presets | Servers that show a display name: `serverId: "&aDisplayName"` (supports `&` colors) |
 | `notify-mode` | `all` | Join/switch/leave visibility: `all`, `admin` (admins only), or `none` (disabled) |
+| `join-proxy-message` | `§a欢迎来到服务器！...` | Personal notification when player joins the proxy |
+| `join-server-message` | `§a你已进入 §e{server}` | Personal notification when player joins a backend server (supports per-server overrides via `join-server-messages`) |
 | `channels-enabled` | `true` | Enable the channel (分区) chat feature |
 | `route-chat` | `true` | Intercept normal chat and route it to the player's active channel |
+| `route-chat-mode` | `channel-cross` | Chat routing mode: `channel` (deny backend, channel only), `channel-log` (deny + proxy log), `channel-cross` (same-server backend, cross-server channel, no duplicate), `both` (no deny, duplicate) |
 | `channels` | — | Preset channels seeded into `channels.yml` on first startup |
-| `tablist` | disabled | Custom TabList: `enabled`, `manage-header-footer`, `refresh-interval`, `header`, `footer` (supports `{online}` placeholder), `entry-format` (per-entry text with `{player}`/`{server}`/`{title}`/`{group}` placeholders) and `bot-format` (separate template for Carpet fake players); set `manage-header-footer: false` to hand header/footer to Carpet `/log` and avoid flicker; entries update in place so Carpet bots stay visible |
+| `tablist` | disabled | Custom TabList — see below |
 | `groups` | — | Preset groups generated on first startup |
 | `messages` | — | Override individual language-file messages (takes priority) |
+
+### TabList Configuration
+
+| Setting | Default | Description |
+|---|---|---|
+| `tablist.enabled` | `true` | Enable the custom TabList |
+| `tablist.manage-header-footer` | `true` | Set `false` to hand header/footer to Carpet `/log` and avoid flicker |
+| `tablist.refresh-interval` | `3` | Tab refresh interval in seconds (min `1`) |
+| `tablist.header` | `&6&lVelocityChat...` | Tab header (supports `{online}`, `{server}`, `{ping}`) |
+| `tablist.footer` | `&7Footer` | Tab footer (supports `{online}`, `{server}`, `{ping}`) |
+| `tablist.entry-format` | `{server}§8 \| &r{title}{player}` | Real player entry format |
+| `tablist.bot-format` | `{server}§8 \| &7&o[假人]&r{title}{player}` | Carpet fake player entry format |
 
 Group data is stored in a `groups.yml` file, channel data in `channels.yml`. Banned words live in `banned_words.txt`, and timed announcements are configured in `auto_broadcast.yml` (all generated on first startup).
 
