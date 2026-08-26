@@ -286,12 +286,20 @@ public class ChannelManager {
         Component component = Component.text(formatted);
         String key = channelId.toLowerCase();
         String defaultKey = getDefaultId();
+        String senderServer = sender != null
+                ? sender.getCurrentServer().map(s -> s.getServerInfo().getName()).orElse(null)
+                : null;
         if (includeSender && sender != null) {
             sender.sendMessage(component);
         }
         for (Player pl : server.getAllPlayers()) {
             if (includeSender && sender != null
                     && pl.getUniqueId().equals(sender.getUniqueId())) continue;
+            // Skip players on the same server as the sender — they already see
+            // the message from the backend's normal chat, so no need to duplicate.
+            if (senderServer != null && pl.getCurrentServer()
+                    .map(s -> s.getServerInfo().getName().equals(senderServer))
+                    .orElse(false)) continue;
             // Effective channel: explicit selection, else the default channel
             String active = playerChannel.get(pl.getUniqueId());
             if (active == null) active = defaultKey;

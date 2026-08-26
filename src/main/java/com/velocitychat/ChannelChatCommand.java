@@ -175,7 +175,7 @@ public class ChannelChatCommand implements SimpleCommand {
                 .replace("{2}", serverName)
                 .replace("{3}", content);
 
-        channels.broadcastToChannel(channel.getId(), formatted, true, player);
+        channels.broadcastToChannel(channel.getId(), formatted, false, player);
         logger.info(ColorUtils.toAnsi(formatted));
     }
 
