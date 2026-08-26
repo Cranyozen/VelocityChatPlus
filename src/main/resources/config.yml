@@ -32,6 +32,14 @@ broadcast-aliases:
 # When enabled, players with velocitychat.admin bypass the cooldown
 broadcast-cooldown: 0
 broadcast-cooldown-bypass: false
+# 跨服广播消息格式 / Broadcast message format
+# 占位符: {0}=发送者, {1}=服务器, {2}=消息
+# Placeholders: {0}=sender, {1}=server, {2}=message
+broadcast-format: "§6[Broadcast] §r{0}§f: {1}"
+# 频道聊天消息格式 / Channel chat message format
+# 占位符: {0}=频道, {1}=玩家, {2}=服务器, {3}=消息
+# Placeholders: {0}=channel, {1}=player, {2}=server, {3}=message
+channel-format: "§d[§6{0}§d]§r[{1}§r]§r{2} §7>>§f {3}"
 
 # ── 跨服邀请功能 / Server Invite ───────────────────────────
 # 玩家输入 /yq [消息] 会在跨服聊天中广播一个邀请，

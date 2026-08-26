@@ -256,18 +256,28 @@ public class ConfigManager {
         return getMessage("qu_an.chat.proxy.name");
     }
 
-    /**
-     * Get the default chat format.
+/**
+     * Get the channel chat message format.
+     * Config key: {@code channel-format}. Placeholders: {0}=channel, {1}=player, {2}=server, {3}=message
      */
-    public String getChatFormat() {
-        return messages.getOrDefault("qu_an.chat.message.chat.default",
-                "§8[§r{0}§8][§r{1}§8]§r<{2}§r> {3}");
+    public String getChannelFormat() {
+        if (config != null && config.containsKey("channel-format")) {
+            Object v = config.get("channel-format");
+            if (v != null && !v.toString().isBlank()) return v.toString();
+        }
+        return messages.getOrDefault("qu_an.chat.message.channel",
+                "§d[§6{0}§d]§r[{1}§r]§r{2} §7>>§f {3}");
     }
 
     /**
      * Get the broadcast message format.
+     * Config key: {@code broadcast-format}. Placeholders: {0}=sender, {1}=server, {2}=message
      */
     public String getBroadcastFormat() {
+        if (config != null && config.containsKey("broadcast-format")) {
+            Object v = config.get("broadcast-format");
+            if (v != null && !v.toString().isBlank()) return v.toString();
+        }
         return messages.getOrDefault("qu_an.chat.message.broadcast",
                 "§6[Broadcast] §r{0}§f: {1}");
     }
@@ -629,37 +639,16 @@ public class ConfigManager {
             // Load the user's config file as lines
             List<String> userLines = new ArrayList<>(Files.readAllLines(configFile));
 
-            // Build a map: section key -> line index of its last content line
-            Map<String, Integer> sectionEnds = new LinkedHashMap<>();
-            int lastTopKeyIdx = -1;
-            String lastTopKey = null;
-            for (int i = 0; i < userLines.size(); i++) {
-                String line = userLines.get(i);
-                String trimmed = line.stripLeading();
-                boolean isTopKey = !trimmed.isEmpty() && !trimmed.startsWith("#")
-                        && !trimmed.startsWith("-") && line.length() == trimmed.length()
-                        && trimmed.contains(":");
-                if (isTopKey) {
-                    if (lastTopKey != null) {
-                        sectionEnds.put(lastTopKey, lastTopKeyIdx);
-                    }
-                    lastTopKey = trimmed.substring(0, trimmed.indexOf(':')).trim();
-                    lastTopKeyIdx = i;
-                } else if (!trimmed.isEmpty()) {
-                    lastTopKeyIdx = i;
-                }
-            }
-            if (lastTopKey != null) {
-                sectionEnds.put(lastTopKey, lastTopKeyIdx);
-            }
-            logger.info("[ConfigMerge] user section boundaries: {}", sectionEnds);
-
             // Extract text blocks from the default config
             Map<String, String> defaultBlocks = extractDefaultBlocks(defaultText);
             logger.info("[ConfigMerge] extracted {} default block(s): {}", defaultBlocks.size(), defaultBlocks.keySet());
 
-            // Group insertions by position (reverse order so later positions shift first)
+            // For each missing key, find the correct insertion point by scanning the
+            // user's config lines.  We locate the nearest preceding top-level key and
+            // insert right after its section ends (last content line before the next
+            // blank line or top-level key).
             TreeMap<Integer, List<String>> insertions = new TreeMap<>(Collections.reverseOrder());
+            int inserted = 0;
             for (String path : missing) {
                 String textBlock = defaultBlocks.get(path);
                 if (textBlock == null) {
@@ -668,15 +657,9 @@ public class ConfigManager {
                 }
 
                 String sectionKey = path.contains(".") ? path.substring(0, path.indexOf('.')) : path;
-                Integer endIdx = sectionEnds.get(sectionKey);
-                int insertAt;
-                if (endIdx != null) {
-                    insertAt = endIdx + 1;
-                } else {
-                    insertAt = userLines.size();
-                    logger.info("[ConfigMerge] section '{}' not found in user config, appending at end", sectionKey);
-                }
+                int insertAt = findInsertionPoint(userLines, sectionKey);
                 insertions.computeIfAbsent(insertAt, k -> new ArrayList<>()).add(textBlock);
+                inserted++;
                 logger.info("[ConfigMerge] queued '{}' for insertion at line {}", path, insertAt);
             }
 
@@ -698,7 +681,7 @@ public class ConfigManager {
             }
 
             Files.writeString(configFile, String.join("\n", userLines));
-            logger.info("[ConfigMerge] wrote {} merged key(s) to config.yml", missing.size());
+            logger.info("[ConfigMerge] wrote {} merged key(s) to config.yml", inserted);
         } catch (Exception e) {
             logger.warn("[ConfigMerge] failed to auto-merge config.yml", e);
         }
@@ -736,7 +719,8 @@ public class ConfigManager {
         String[] lines = text.split("\n", -1);
 
         String section = null;
-        List<String> pendingComments = new ArrayList<>();
+        List<String> currentComments = new ArrayList<>();  // comments for the current block
+        List<String> incomingComments = new ArrayList<>();  // comments accumulated for the next block
         StringBuilder currentBlock = new StringBuilder();
         String currentPath = null;
 
@@ -744,54 +728,83 @@ public class ConfigManager {
             String trimmed = line.stripLeading();
 
             if (trimmed.isEmpty()) {
-                // Blank line: finalize the current sub-key block if any
+                // Blank line: finalize current block with ALL accumulated comments
                 if (currentPath != null && currentBlock.length() > 0) {
-                    finalizeBlock(blocks, currentPath, pendingComments, currentBlock);
+                    currentComments.addAll(incomingComments);
+                    incomingComments.clear();
+                    finalizeBlock(blocks, currentPath, currentComments, currentBlock);
+                } else {
+                    incomingComments.clear();
                 }
                 currentPath = null;
                 currentBlock.setLength(0);
-                pendingComments.clear();
+                currentComments.clear();
                 continue;
             }
 
             if (trimmed.startsWith("#")) {
-                pendingComments.add(line);
+                incomingComments.add(line);
                 continue;
             }
 
             int indent = line.length() - trimmed.length();
             int colon = trimmed.indexOf(':');
             if (colon <= 0) {
-                pendingComments.clear();
+                incomingComments.clear();
                 continue;
             }
 
             String key = trimmed.substring(0, colon).trim();
 
             if (indent == 0) {
-                // Top-level key — finalize any previous sub-key, start new section
-                if (currentPath != null && currentBlock.length() > 0) {
-                    finalizeBlock(blocks, currentPath, pendingComments, currentBlock);
+                String valuePart = trimmed.substring(colon + 1).trim();
+                if (!valuePart.isEmpty()) {
+                    // Top-level key with inline value.
+                    // Finalize previous block with its own comments (not incoming).
+                    if (currentPath != null && currentBlock.length() > 0) {
+                        finalizeBlock(blocks, currentPath, currentComments, currentBlock);
+                    }
+                    // The incoming comments belong to THIS key — promote them.
+                    currentComments.clear();
+                    currentComments.addAll(incomingComments);
+                    incomingComments.clear();
+                    currentPath = key;
+                    currentBlock = new StringBuilder();
+                    currentBlock.append(line).append("\n");
+                } else {
+                    // Section key (e.g. "tablist:")
+                    if (currentPath != null && currentBlock.length() > 0) {
+                        currentComments.addAll(incomingComments);
+                        incomingComments.clear();
+                        finalizeBlock(blocks, currentPath, currentComments, currentBlock);
+                    } else {
+                        incomingComments.clear();
+                    }
+                    section = key;
+                    currentPath = null;
+                    currentBlock.setLength(0);
+                    currentComments.clear();
                 }
-                section = key;
-                currentPath = null;
-                currentBlock.setLength(0);
-                pendingComments.clear();
             } else if (section != null) {
-                // Sub-key within a section — finalize previous sub-key, start new
+                // Sub-key within a section — finalize previous sub-key with its
+                // OWN comments only (incoming belong to THIS key, not the previous).
                 if (currentPath != null && currentBlock.length() > 0) {
-                    finalizeBlock(blocks, currentPath, pendingComments, currentBlock);
+                    finalizeBlock(blocks, currentPath, currentComments, currentBlock);
                 }
+                currentComments.clear();
+                currentComments.addAll(incomingComments);
+                incomingComments.clear();
                 currentPath = section + "." + key;
                 currentBlock = new StringBuilder();
                 currentBlock.append(line).append("\n");
-                pendingComments.clear();
             }
         }
 
-        // Finalize the last sub-key
+        // Finalize the last block
         if (currentPath != null && currentBlock.length() > 0) {
-            finalizeBlock(blocks, currentPath, pendingComments, currentBlock);
+            currentComments.addAll(incomingComments);
+            incomingComments.clear();
+            finalizeBlock(blocks, currentPath, currentComments, currentBlock);
         }
         return blocks;
     }
@@ -804,5 +817,39 @@ public class ConfigManager {
         blocks.put(path, full.toString());
         block.setLength(0);
         comments.clear();
+    }
+
+    /**
+     * Find the line index after which a new key should be inserted in the user's
+     * config.  Scans backward from the end to find the nearest preceding top-level
+     * key whose section contains the given key, then returns the line after that
+     * section's last content line.
+     */
+    private static int findInsertionPoint(List<String> lines, String key) {
+        // Scan backward to find the nearest preceding top-level key
+        for (int i = lines.size() - 1; i >= 0; i--) {
+            String line = lines.get(i);
+            String trimmed = line.stripLeading();
+            boolean isTopKey = !trimmed.isEmpty() && !trimmed.startsWith("#")
+                    && !trimmed.startsWith("-") && line.length() == trimmed.length()
+                    && trimmed.contains(":");
+            if (!isTopKey) continue;
+
+            String topKey = trimmed.substring(0, trimmed.indexOf(':')).trim();
+            // Found a preceding top-level key — find the end of its section
+            if (topKey.compareTo(key) <= 0) {
+                int lastContent = i;
+                for (int j = i + 1; j < lines.size(); j++) {
+                    String l = lines.get(j).stripLeading();
+                    if (l.isEmpty()) break; // blank line = section boundary
+                    // Another top-level key = new section
+                    if (!l.startsWith("#") && !l.startsWith(" ") && !l.startsWith("\t")
+                            && lines.get(j).length() == l.length() && l.contains(":")) break;
+                    lastContent = j;
+                }
+                return lastContent + 1;
+            }
+        }
+        return lines.size(); // no preceding key found — append at end
     }
 }
