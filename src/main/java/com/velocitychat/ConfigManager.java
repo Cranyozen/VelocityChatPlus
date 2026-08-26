@@ -648,7 +648,7 @@ public class ConfigManager {
     public void mergeMissingConfig() {
         Path configFile = dataDirectory.resolve("config.yml");
         if (!Files.exists(configFile) || config == null) {
-            logger.info("[ConfigMerge] skipped: file exists={}, config loaded={}", Files.exists(configFile), config != null);
+            logger.debug("[ConfigMerge] skipped: file exists={}, config loaded={}", Files.exists(configFile), config != null);
             return;
         }
 
@@ -672,7 +672,7 @@ public class ConfigManager {
             // Find all missing key paths
             List<String> missing = new ArrayList<>();
             findMissingKeys(defaultMap, config, "", missing);
-            logger.info("[ConfigMerge] found {} missing key(s): {}", missing.size(), missing);
+            logger.debug("[ConfigMerge] found {} missing key(s): {}", missing.size(), missing);
             if (missing.isEmpty()) return;
 
             // Load the user's config file as lines
@@ -680,7 +680,7 @@ public class ConfigManager {
 
             // Extract text blocks from the default config
             Map<String, String> defaultBlocks = extractDefaultBlocks(defaultText);
-            logger.info("[ConfigMerge] extracted {} default block(s): {}", defaultBlocks.size(), defaultBlocks.keySet());
+            logger.debug("[ConfigMerge] extracted {} default block(s): {}", defaultBlocks.size(), defaultBlocks.keySet());
 
             // For each missing key, find the correct insertion point by scanning the
             // user's config lines.  We locate the nearest preceding top-level key and
@@ -699,7 +699,7 @@ public class ConfigManager {
                 int insertAt = findInsertionPoint(userLines, sectionKey);
                 insertions.computeIfAbsent(insertAt, k -> new ArrayList<>()).add(textBlock);
                 inserted++;
-                logger.info("[ConfigMerge] queued '{}' for insertion at line {}", path, insertAt);
+                logger.debug("[ConfigMerge] queued '{}' for insertion at line {}", path, insertAt);
             }
 
             // Perform insertions
@@ -720,7 +720,7 @@ public class ConfigManager {
             }
 
             Files.writeString(configFile, String.join("\n", userLines));
-            logger.info("[ConfigMerge] wrote {} merged key(s) to config.yml", inserted);
+            logger.debug("[ConfigMerge] wrote {} merged key(s) to config.yml", inserted);
         } catch (Exception e) {
             logger.warn("[ConfigMerge] failed to auto-merge config.yml", e);
         }

@@ -118,20 +118,20 @@ public class PlayerListener {
             String joinServerMsg = config.getJoinServerMessage(currentName)
                     .replace("{server}", displayName)
                     .replace("{player}", player.getUsername());
-            logger.info("[JoinNotify] Sending join-server to {}: {}", player.getUsername(), joinServerMsg);
+            logger.debug("[JoinNotify] Sending join-server to {}: {}", player.getUsername(), joinServerMsg);
             player.sendMessage(Component.text(ColorUtils.translate(joinServerMsg)));
         } else {
             // Player joined the proxy for the first time — send both
             String joinProxyMsg = config.getJoinProxyMessage()
                     .replace("{server}", displayName)
                     .replace("{player}", player.getUsername());
-            logger.info("[JoinNotify] Sending join-proxy to {}: {}", player.getUsername(), joinProxyMsg);
+            logger.debug("[JoinNotify] Sending join-proxy to {}: {}", player.getUsername(), joinProxyMsg);
             player.sendMessage(Component.text(ColorUtils.translate(joinProxyMsg)));
 
             String joinServerMsg = config.getJoinServerMessage(currentName)
                     .replace("{server}", displayName)
                     .replace("{player}", player.getUsername());
-            logger.info("[JoinNotify] Sending join-server to {}: {}", player.getUsername(), joinServerMsg);
+            logger.debug("[JoinNotify] Sending join-server to {}: {}", player.getUsername(), joinServerMsg);
             player.sendMessage(Component.text(ColorUtils.translate(joinServerMsg)));
         }
     }

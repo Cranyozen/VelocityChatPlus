@@ -41,7 +41,7 @@ public class ChatRouter {
         if (channelOpt.isEmpty()) return;
 
         String mode = config.getRouteChatMode().trim();
-        logger.info("[ChatRouter] mode='{}' sendToSender={}", mode, !"channel-cross".equals(mode));
+        logger.debug("[ChatRouter] mode='{}' sendToSender={}", mode, !"channel-cross".equals(mode));
 
         switch (mode) {
             case "channel":

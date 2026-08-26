@@ -290,7 +290,7 @@ public class ChannelManager {
         String senderServer = (!includeSender && sender != null)
                 ? sender.getCurrentServer().map(s -> s.getServerInfo().getName()).orElse(null)
                 : null;
-        logger.info("[Channel] broadcast channel='{}' sendToSender={} senderServer='{}'",
+        logger.debug("[Channel] broadcast channel='{}' sendToSender={} senderServer='{}'",
                 channelId, includeSender, senderServer);
         if (includeSender && sender != null) {
             sender.sendMessage(component);
@@ -303,7 +303,7 @@ public class ChannelManager {
             if (senderServer != null && pl.getCurrentServer()
                     .map(s -> s.getServerInfo().getName().equals(senderServer))
                     .orElse(false)) {
-                logger.info("[Channel] skip same-server player '{}'", pl.getUsername());
+                logger.debug("[Channel] skip same-server player '{}'", pl.getUsername());
                 continue;
             }
             // Effective channel: explicit selection, else the default channel
@@ -314,7 +314,7 @@ public class ChannelManager {
                 sent++;
             }
         }
-        logger.info("[Channel] sent to {} player(s)", sent);
+        logger.debug("[Channel] sent to {} player(s)", sent);
     }
 
     /**

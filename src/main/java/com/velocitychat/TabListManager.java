@@ -151,6 +151,7 @@ public class TabListManager {
                     presentNames.add(target.getUsername().toLowerCase());
                     entry.setDisplayName(entryComponent(target));
                     entry.setLatency(ping(target));
+                    entry.setListOrder(0);
                     logger.debug("[TabList]   entry id='{}' name='{}' dsp='{}' -> ONLINE '{}'",
                             id, entryName, dsp, target.getUsername());
                 } else if (added.contains(id)) {
@@ -164,6 +165,7 @@ public class TabListManager {
                     // Backend-injected entry (Carpet bot or stale leftover) — apply
                     // the bot-specific format so bots are visually distinct.
                     entry.setDisplayName(botComponent(viewer, entryName));
+                    entry.setListOrder(1);
                     logger.debug("[TabList]   entry id='{}' name='{}' dsp='{}' -> KEPT (bot, styled)",
                             id, entryName, dsp);
                 }
@@ -174,8 +176,10 @@ public class TabListManager {
                 UUID id = other.getGameProfile().getId();
                 if (present.contains(id)
                         || presentNames.contains(other.getUsername().toLowerCase())) continue;
-                tab.addEntry(tab.buildEntry(other.getGameProfile(),
-                        entryComponent(other), ping(other), 0));
+                var newEntry = tab.buildEntry(other.getGameProfile(),
+                        entryComponent(other), ping(other), 0);
+                newEntry.setListOrder(0);
+                tab.addEntry(newEntry);
                 added.add(id);
                 presentNames.add(other.getUsername().toLowerCase());
                 logger.debug("[TabList]   ADD id='{}' name='{}' (missing)",
