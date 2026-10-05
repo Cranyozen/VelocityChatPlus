@@ -26,13 +26,18 @@ import java.util.List;
  * </ul>
  * <p>
  * Only needs to be installed on the Velocity proxy; no backend server plugins required.
+ * <p>
+ * 注意：Velocity 用这里的 {@code id} 作为数据目录名，即 {@code plugins/<id>/}。
+ * 改动 id 会同时改变配置文件所在目录，老服务器需要手动迁移原有目录。
+ * Note: Velocity names the data directory after this {@code id} — {@code plugins/<id>/}.
+ * Changing it moves where the config lives, so an existing install has to be migrated.
  */
 @Plugin(
-        id = "velocity-chat",
-        name = "VelocityChat",
+        id = "velocity-chat-plus",
+        name = "VelocityChatPlus",
         version = "2.2.0",
         description = "Cross-server proxy chat plugin — broadcast, join/switch/leave messages, server invites, forbidden-word filter, timed announcements, channel chat, custom TabList, server aliases",
-        authors = {"YuHongChen(LiquidTeam) QQ:1464670605"},
+        authors = {"Cranyozen", "YuHongChen(LiquidTeam) QQ:1464670605"},
         url = "https://github.com/LiquidTeamYHC/Velocity_Plugin/tree/main/VelocityChat",
         dependencies = {
                 @Dependency(id = "luckperms", optional = true)

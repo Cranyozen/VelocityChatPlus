@@ -1,5 +1,5 @@
 {
-    "id": "velocity-chat",
+    "id": "velocity-chat-plus",
     "name": "VelocityChatPlus",
     "version": "2.2.0",
     "description": "Cross-server proxy chat plugin — broadcast, join/switch/leave messages, server invites, forbidden-word filter, timed announcements, channel chat, custom TabList, server aliases",
