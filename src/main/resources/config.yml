@@ -76,6 +76,9 @@ forbidden-words-bypass-permission: "velocitychat.admin"
 # Format: real_server_id: "&aDisplayName" (supports & color codes)
 # 只需修改本文件即可，无需再改语言文件
 # Edit only this file — no need to touch the language files anymore
+# 下面几项只是示例，请按自己的服务器增删；升级插件时被删掉的别名不会自动补回来
+# The entries below are examples — add and remove them freely; an update never re-adds
+# aliases you deleted
 server-aliases:
   # 真实服务器名: "&a显示名称"
   lobby: "&6登录服"

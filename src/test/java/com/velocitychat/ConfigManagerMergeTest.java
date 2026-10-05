@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -28,6 +29,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * already wrote, and with the running configuration matching the file that was written.
  */
 class ConfigManagerMergeTest {
+
+    /**
+     * Sections whose entries belong to the user — these must match the list in
+     * {@code ConfigManager}: the plugin introduces such a section once, but never re-adds
+     * entries the user deleted from it.
+     */
+    private static final Set<String> USER_MAINTAINED_SECTIONS =
+            Set.of("server-aliases", "join-server-messages", "channels", "groups", "messages");
 
     @TempDir
     Path dataDirectory;
@@ -97,6 +106,11 @@ class ConfigManagerMergeTest {
      */
     @SuppressWarnings("unchecked")
     private static Map<String, Object> deepMerge(Map<String, Object> defaults, Map<String, Object> user) {
+        return deepMerge(defaults, user, "");
+    }
+
+    private static Map<String, Object> deepMerge(Map<String, Object> defaults, Map<String, Object> user,
+                                                 String prefix) {
         Map<String, Object> merged = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : defaults.entrySet()) {
             String key = entry.getKey();
@@ -106,11 +120,13 @@ class ConfigManagerMergeTest {
                 continue;
             }
             Object userValue = user.get(key);
-            if (defValue instanceof Map && (userValue == null || userValue instanceof Map)) {
+            if (defValue instanceof Map && USER_MAINTAINED_SECTIONS.contains(childPath(prefix, key))) {
+                merged.put(key, userValue); // the user owns this section's entries
+            } else if (defValue instanceof Map && (userValue == null || userValue instanceof Map)) {
                 Map<String, Object> child = userValue instanceof Map
                         ? (Map<String, Object>) userValue
                         : new LinkedHashMap<>();
-                merged.put(key, deepMerge((Map<String, Object>) defValue, child));
+                merged.put(key, deepMerge((Map<String, Object>) defValue, child, childPath(prefix, key)));
             } else {
                 merged.put(key, userValue);
             }
@@ -119,6 +135,10 @@ class ConfigManagerMergeTest {
             merged.putIfAbsent(entry.getKey(), entry.getValue());
         }
         return merged;
+    }
+
+    private static String childPath(String prefix, String key) {
+        return prefix.isEmpty() ? key : prefix + "." + key;
     }
 
     private static List<String> lines(String text) {
@@ -314,7 +334,21 @@ class ConfigManagerMergeTest {
                 # 我的服务器配置 / my server config
                 language: en_US
                 broadcast-cooldown: 12
+                """;
 
+        String mergedText = loadAndReadBack(custom);
+        Map<String, Object> merged = parse(mergedText);
+
+        assertTrue(mergedText.contains("# 我的服务器配置 / my server config"));
+        assertEquals(12, merged.get("broadcast-cooldown"));
+        assertEquals(deepMerge(parse(builtinDefault()), parse(custom)), merged);
+    }
+
+    /** 用户删掉的预设服务器别名不能被升级补回来 / deleted preset aliases must stay deleted. */
+    @Test
+    void doesNotReAddEntriesOfUserMaintainedSections() throws Exception {
+        String custom = """
+                language: zh_CN
                 # 我的服务器别名 / my own aliases
                 server-aliases:
                   lobby: "&a我的大厅"
@@ -325,13 +359,25 @@ class ConfigManagerMergeTest {
         Map<String, Object> merged = parse(mergedText);
         Map<?, ?> aliases = (Map<?, ?>) merged.get("server-aliases");
 
-        assertTrue(mergedText.contains("# 我的服务器配置 / my server config"));
-        assertTrue(mergedText.contains("# 我的服务器别名 / my own aliases"));
-        assertEquals(12, merged.get("broadcast-cooldown"));
+        assertEquals(2, aliases.size(), "deleted preset aliases came back: " + aliases);
         assertEquals("&a我的大厅", aliases.get("lobby"));
         assertEquals("&d自定义服", aliases.get("my-custom-server"));
-        assertTrue(aliases.containsKey("survival"), "missing default aliases should be merged in");
+        assertFalse(aliases.containsKey("survival"), "preset aliases must not be re-added");
         assertEquals(1, countKeyLines(mergedText, "server-aliases", 0));
+        assertTrue(mergedText.contains("# 我的服务器别名 / my own aliases"),
+                "the user's own comments must survive");
+        assertEquals(deepMerge(parse(builtinDefault()), parse(custom)), merged,
+                "everything else must still be merged");
+    }
+
+    /** 整节缺失时仍然按默认生成一次 / a missing user-maintained section is still introduced once. */
+    @Test
+    void introducesAMissingUserMaintainedSectionOnce() throws Exception {
+        String mergedText = loadAndReadBack("language: zh_CN\n");
+
+        Map<String, Object> merged = parse(mergedText);
+        assertEquals(1, countKeyLines(mergedText, "server-aliases", 0));
+        assertEquals(parse(builtinDefault()).get("server-aliases"), merged.get("server-aliases"));
     }
 
     @Test

@@ -648,14 +648,26 @@ public class ConfigManager {
     // ── Auto-merge missing config keys ────────────────────────
 
     /**
+     * 内容归用户自己维护的节：插件只在这个节整体缺失时按默认生成一次，
+     * 之后不会再把它里面被用户删掉的条目补回来（例如删掉的预设服务器别名）。
+     * <p>
+     * Sections whose entries belong to the user rather than to the plugin's options: the
+     * merge introduces such a section when it is missing entirely, but never re-adds
+     * entries the user has deleted from it.
+     */
+    private static final Set<String> USER_MAINTAINED_SECTIONS =
+            Set.of("server-aliases", "join-server-messages", "channels", "groups", "messages");
+
+    /**
      * Compare the user's config.yml against the built-in default and append the keys the
      * default has gained since the file was written, so an existing config keeps working —
      * and keeps growing — after a plugin upgrade.
      * <p>
      * Existing keys, values, comments and line endings are never changed: a missing
      * sub-key is inserted next to its siblings inside the section that already holds its
-     * parent, and a whole missing section is written out with all of its keys. The
-     * in-memory config is then refreshed from the merged text, so what the plugin runs
+     * parent, and a whole missing section is written out with all of its keys. Sections
+     * listed in {@link #USER_MAINTAINED_SECTIONS} keep whatever entries the user gave them.
+     * The in-memory config is then refreshed from the merged text, so what the plugin runs
      * with is exactly what the file says.
      */
     @SuppressWarnings("unchecked")
@@ -728,7 +740,9 @@ public class ConfigManager {
      * <p>
      * A section the user declared without any sub-keys (a bare {@code tablist:}) is
      * descended into as if it were empty, so its keys end up underneath it instead of a
-     * second, duplicate section key being appended to the file.
+     * second, duplicate section key being appended to the file. Sections in
+     * {@link #USER_MAINTAINED_SECTIONS} are never descended into: their entries are the
+     * user's, so only the section itself can be a missing key.
      */
     @SuppressWarnings("unchecked")
     private void findMissingKeys(Map<String, Object> def, Map<String, Object> user,
@@ -740,8 +754,10 @@ public class ConfigManager {
             Object defVal = entry.getValue();
             boolean declaredByUser = user.containsKey(key);
             Object userVal = user.get(key);
+            boolean userMaintained = USER_MAINTAINED_SECTIONS.contains(path);
 
-            if (defVal instanceof Map && declaredByUser && (userVal == null || userVal instanceof Map)) {
+            if (defVal instanceof Map && declaredByUser && !userMaintained
+                    && (userVal == null || userVal instanceof Map)) {
                 Map<String, Object> userSection = userVal instanceof Map
                         ? (Map<String, Object>) userVal
                         : Collections.emptyMap();
