@@ -25,6 +25,9 @@ public class ConfigManager {
 
     // Raw config values
     private Map<String, Object> config;
+    // 配置文件是否成功解析：解析失败时不做合并，避免把默认值写进一个损坏的文件
+    // Whether config.yml parsed cleanly — a broken file must never be merged into.
+    private boolean configParsed;
     private final Map<String, String> messages = new LinkedHashMap<>();
     // 服务器别名: 小写服务器ID -> 原始显示名称 (直接写在 config.yml 的 server-aliases 中)
     private final Map<String, String> serverAliases = new HashMap<>();
@@ -58,10 +61,13 @@ public class ConfigManager {
         }
 
         // Load config
+        configParsed = false;
         if (Files.exists(configFile)) {
             try (InputStream in = Files.newInputStream(configFile)) {
                 Yaml yaml = new Yaml();
                 config = yaml.load(in);
+                if (config == null) config = new LinkedHashMap<>();
+                configParsed = true;
                 logger.info("Configuration loaded from config.yml");
             } catch (Exception e) {
                 logger.warn("Failed to parse config.yml", e);
@@ -70,6 +76,12 @@ public class ConfigManager {
         } else {
             config = new LinkedHashMap<>();
         }
+
+        // 先把内置默认中新增的键合并进配置文件，再读取任何设置，
+        // 这样语言、别名、消息与运行期行为都以合并后的配置为准
+        // Merge the keys newer plugin versions added before anything reads the config,
+        // so language, aliases, messages and runtime behaviour all see them.
+        mergeMissingConfig();
 
         // Read language setting
         if (config.containsKey("language")) {
@@ -97,9 +109,6 @@ public class ConfigManager {
                 }
             }
         }
-
-        // Append any keys from the built-in default that are missing in the user's config
-        mergeMissingConfig();
 
         return true;
     }
@@ -639,95 +648,87 @@ public class ConfigManager {
     // ── Auto-merge missing config keys ────────────────────────
 
     /**
-     * Compare the user's config.yml against the built-in default and append any missing
-     * keys so the file stays up-to-date after a plugin upgrade.  Existing keys and
-     * comments are never modified — only truly new keys are added at the end of their
-     * parent section (or at the file end for new top-level sections).
+     * Compare the user's config.yml against the built-in default and append the keys the
+     * default has gained since the file was written, so an existing config keeps working —
+     * and keeps growing — after a plugin upgrade.
+     * <p>
+     * Existing keys, values, comments and line endings are never changed: a missing
+     * sub-key is inserted next to its siblings inside the section that already holds its
+     * parent, and a whole missing section is written out with all of its keys. The
+     * in-memory config is then refreshed from the merged text, so what the plugin runs
+     * with is exactly what the file says.
      */
     @SuppressWarnings("unchecked")
     public void mergeMissingConfig() {
         Path configFile = dataDirectory.resolve("config.yml");
         if (!Files.exists(configFile) || config == null) {
-            logger.debug("[ConfigMerge] skipped: file exists={}, config loaded={}", Files.exists(configFile), config != null);
+            logger.debug("[ConfigMerge] skipped: file exists={}, config loaded={}",
+                    Files.exists(configFile), config != null);
+            return;
+        }
+        if (!configParsed) {
+            // 解析失败时绝不动文件，否则只会把默认值追加到一个已损坏的配置里
+            // Never touch a file that did not parse — appending defaults would only make it worse.
+            logger.warn("[ConfigMerge] skipped: config.yml could not be parsed");
             return;
         }
 
         try {
-            // Load the built-in default config as text and as a YAML map
-            String defaultText;
-            try (InputStream in = getClass().getClassLoader().getResourceAsStream("config.yml")) {
-                if (in == null) {
-                    logger.warn("[ConfigMerge] default config.yml not found in resources");
-                    return;
-                }
-                defaultText = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-            }
-            Yaml yaml = new Yaml();
-            Map<String, Object> defaultMap = yaml.load(defaultText);
+            String defaultText = readBuiltinConfig();
+            if (defaultText == null) return;
+
+            Map<String, Object> defaultMap = new Yaml().load(normalizeLineEndings(defaultText));
             if (defaultMap == null) {
                 logger.warn("[ConfigMerge] default config.yml parsed as null");
                 return;
             }
 
-            // Find all missing key paths
+            String userText = Files.readString(configFile, StandardCharsets.UTF_8);
             List<String> missing = new ArrayList<>();
             findMissingKeys(defaultMap, config, "", missing);
-            logger.debug("[ConfigMerge] found {} missing key(s): {}", missing.size(), missing);
-            if (missing.isEmpty()) return;
-
-            // Load the user's config file as lines
-            List<String> userLines = new ArrayList<>(Files.readAllLines(configFile));
-
-            // Extract text blocks from the default config
-            Map<String, String> defaultBlocks = extractDefaultBlocks(defaultText);
-            logger.debug("[ConfigMerge] extracted {} default block(s): {}", defaultBlocks.size(), defaultBlocks.keySet());
-
-            // For each missing key, find the correct insertion point by scanning the
-            // user's config lines.  We locate the nearest preceding top-level key and
-            // insert right after its section ends (last content line before the next
-            // blank line or top-level key).
-            TreeMap<Integer, List<String>> insertions = new TreeMap<>(Collections.reverseOrder());
-            int inserted = 0;
-            for (String path : missing) {
-                String textBlock = defaultBlocks.get(path);
-                if (textBlock == null) {
-                    logger.warn("[ConfigMerge] no text block found for missing key '{}'", path);
-                    continue;
-                }
-
-                String sectionKey = path.contains(".") ? path.substring(0, path.indexOf('.')) : path;
-                int insertAt = findInsertionPoint(userLines, sectionKey);
-                insertions.computeIfAbsent(insertAt, k -> new ArrayList<>()).add(textBlock);
-                inserted++;
-                logger.debug("[ConfigMerge] queued '{}' for insertion at line {}", path, insertAt);
+            if (missing.isEmpty()) {
+                logger.debug("[ConfigMerge] config.yml is already up to date");
+                return;
             }
 
-            // Perform insertions
-            for (var entry : insertions.entrySet()) {
-                int idx = entry.getKey();
-                List<String> blocks = entry.getValue();
-                if (idx < userLines.size() && !userLines.get(idx - 1).isBlank()) {
-                    userLines.add(idx, "");
-                    idx++;
-                }
-                int offset = 0;
-                for (String block : blocks) {
-                    for (String bl : block.split("\n", -1)) {
-                        userLines.add(idx + offset, bl);
-                        offset++;
-                    }
-                }
-            }
+            String merged = insertMissingBlocks(defaultText, userText, missing);
+            if (merged.equals(userText)) return;
 
-            Files.writeString(configFile, String.join("\n", userLines));
-            logger.debug("[ConfigMerge] wrote {} merged key(s) to config.yml", inserted);
+            Files.writeString(configFile, merged, StandardCharsets.UTF_8);
+            logger.info("[ConfigMerge] merged {} missing config key(s) into config.yml: {}",
+                    missing.size(), missing);
+
+            // 重新解析合并后的文本，保证运行中的配置与磁盘上的文件一致
+            // Re-parse the merged text so the running config matches the file on disk.
+            Object reloaded = new Yaml().load(normalizeLineEndings(merged));
+            if (reloaded instanceof Map<?, ?> map) {
+                config = (Map<String, Object>) map;
+            }
         } catch (Exception e) {
             logger.warn("[ConfigMerge] failed to auto-merge config.yml", e);
         }
     }
 
+    /** Read the built-in default config.yml, or {@code null} when it is unavailable. */
+    private String readBuiltinConfig() {
+        try (InputStream in = getClass().getClassLoader().getResourceAsStream("config.yml")) {
+            if (in == null) {
+                logger.warn("[ConfigMerge] default config.yml not found in resources");
+                return null;
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            logger.warn("[ConfigMerge] could not read the default config.yml", e);
+            return null;
+        }
+    }
+
     /**
      * Recursively find key paths present in {@code def} but missing from {@code user}.
+     * <p>
+     * A section the user declared without any sub-keys (a bare {@code tablist:}) is
+     * descended into as if it were empty, so its keys end up underneath it instead of a
+     * second, duplicate section key being appended to the file.
      */
     @SuppressWarnings("unchecked")
     private void findMissingKeys(Map<String, Object> def, Map<String, Object> user,
@@ -737,158 +738,307 @@ public class ConfigManager {
             if (key == null) continue;
             String path = prefix.isEmpty() ? key : prefix + "." + key;
             Object defVal = entry.getValue();
+            boolean declaredByUser = user.containsKey(key);
             Object userVal = user.get(key);
 
-            if (userVal == null) {
+            if (defVal instanceof Map && declaredByUser && (userVal == null || userVal instanceof Map)) {
+                Map<String, Object> userSection = userVal instanceof Map
+                        ? (Map<String, Object>) userVal
+                        : Collections.emptyMap();
+                findMissingKeys((Map<String, Object>) defVal, userSection, path, out);
+            } else if (!declaredByUser) {
                 out.add(path);
-            } else if (defVal instanceof Map && userVal instanceof Map) {
-                findMissingKeys((Map<String, Object>) defVal, (Map<String, Object>) userVal, path, out);
             }
         }
     }
 
     /**
-     * Parse the default config text into text blocks keyed by full YAML path.
-     * Each block includes any preceding comment lines and the key line itself,
-     * preserving the original indentation so it can be directly inserted into
-     * the user's config file.
+     * Copy the default block of every missing key into {@code userText}. Existing lines are
+     * only ever pushed down by an insertion — never rewritten, reordered or removed.
+     *
+     * @return the merged config text, using the line endings the user's file already had
      */
-    private static Map<String, String> extractDefaultBlocks(String text) {
-        Map<String, String> blocks = new LinkedHashMap<>();
-        String[] lines = text.split("\n", -1);
+    private String insertMissingBlocks(String defaultText, String userText, List<String> missing) {
+        String defaultYaml = normalizeLineEndings(defaultText);
+        String userYaml = normalizeLineEndings(userText);
 
-        String section = null;
-        List<String> currentComments = new ArrayList<>();  // comments for the current block
-        List<String> incomingComments = new ArrayList<>();  // comments accumulated for the next block
-        StringBuilder currentBlock = new StringBuilder();
-        String currentPath = null;
+        YamlTextTree defaultTree = YamlTextTree.parse(defaultYaml);
+        YamlTextTree userTree = YamlTextTree.parse(userYaml);
+        List<String> lines = new ArrayList<>(Arrays.asList(userYaml.split("\n", -1)));
 
-        for (String line : lines) {
-            String trimmed = line.stripLeading();
-
-            if (trimmed.isEmpty()) {
-                // Blank line: finalize current block with ALL accumulated comments
-                if (currentPath != null && currentBlock.length() > 0) {
-                    currentComments.addAll(incomingComments);
-                    incomingComments.clear();
-                    finalizeBlock(blocks, currentPath, currentComments, currentBlock);
-                } else {
-                    incomingComments.clear();
-                }
-                currentPath = null;
-                currentBlock.setLength(0);
-                currentComments.clear();
+        // 多个缺失键可能落在同一个插入点：按默认文件中的顺序分组保存
+        // Several missing keys can share one insertion point — keep them in default order.
+        Map<Integer, List<String>> insertions = new TreeMap<>();
+        for (String path : missing) {
+            YamlNode defaultNode = defaultTree.find(path);
+            if (defaultNode == null) {
+                logger.warn("[ConfigMerge] no default text block found for missing key '{}'", path);
                 continue;
             }
-
-            if (trimmed.startsWith("#")) {
-                incomingComments.add(line);
+            int at = insertionLine(path, defaultTree, userTree, lines.size());
+            if (at < 0) {
+                logger.warn("[ConfigMerge] could not place missing key '{}' safely, skipping it", path);
                 continue;
             }
-
-            int indent = line.length() - trimmed.length();
-            int colon = trimmed.indexOf(':');
-            if (colon <= 0) {
-                incomingComments.clear();
-                continue;
-            }
-
-            String key = trimmed.substring(0, colon).trim();
-
-            if (indent == 0) {
-                String valuePart = trimmed.substring(colon + 1).trim();
-                if (!valuePart.isEmpty()) {
-                    // Top-level key with inline value.
-                    // Finalize previous block with its own comments (not incoming).
-                    if (currentPath != null && currentBlock.length() > 0) {
-                        finalizeBlock(blocks, currentPath, currentComments, currentBlock);
-                    }
-                    // The incoming comments belong to THIS key — promote them.
-                    currentComments.clear();
-                    currentComments.addAll(incomingComments);
-                    incomingComments.clear();
-                    currentPath = key;
-                    currentBlock = new StringBuilder();
-                    currentBlock.append(line).append("\n");
-                } else {
-                    // Section key (e.g. "tablist:")
-                    if (currentPath != null && currentBlock.length() > 0) {
-                        currentComments.addAll(incomingComments);
-                        incomingComments.clear();
-                        finalizeBlock(blocks, currentPath, currentComments, currentBlock);
-                    } else {
-                        incomingComments.clear();
-                    }
-                    section = key;
-                    currentPath = null;
-                    currentBlock.setLength(0);
-                    currentComments.clear();
-                }
-            } else if (section != null) {
-                // Sub-key within a section — finalize previous sub-key with its
-                // OWN comments only (incoming belong to THIS key, not the previous).
-                if (currentPath != null && currentBlock.length() > 0) {
-                    finalizeBlock(blocks, currentPath, currentComments, currentBlock);
-                }
-                currentComments.clear();
-                currentComments.addAll(incomingComments);
-                incomingComments.clear();
-                currentPath = section + "." + key;
-                currentBlock = new StringBuilder();
-                currentBlock.append(line).append("\n");
-            }
+            insertions.computeIfAbsent(at, k -> new ArrayList<>())
+                    .addAll(reindentForUser(path, defaultNode, userTree));
         }
 
-        // Finalize the last block
-        if (currentPath != null && currentBlock.length() > 0) {
-            currentComments.addAll(incomingComments);
-            incomingComments.clear();
-            finalizeBlock(blocks, currentPath, currentComments, currentBlock);
+        // 从文件末尾往前插入，这样前面算好的行号不会被后面的插入打乱
+        // Insert bottom-up so the line numbers computed above stay valid.
+        List<Integer> positions = new ArrayList<>(insertions.keySet());
+        positions.sort(Comparator.reverseOrder());
+        for (int at : positions) {
+            insertBlock(lines, at, insertions.get(at));
         }
-        return blocks;
-    }
 
-    private static void finalizeBlock(Map<String, String> blocks, String path,
-                                      List<String> comments, StringBuilder block) {
-        StringBuilder full = new StringBuilder();
-        for (String c : comments) full.append(c).append("\n");
-        full.append(block);
-        blocks.put(path, full.toString());
-        block.setLength(0);
-        comments.clear();
+        String merged = String.join("\n", lines);
+        if (userYaml.endsWith("\n") && !merged.endsWith("\n")) {
+            merged = merged + "\n"; // keep the trailing newline the file already had
+        }
+        return userText.contains("\r\n") ? merged.replace("\n", "\r\n") : merged;
     }
 
     /**
-     * Find the line index after which a new key should be inserted in the user's
-     * config.  Scans backward from the end to find the nearest preceding top-level
-     * key whose section contains the given key, then returns the line after that
-     * section's last content line.
+     * The default block of {@code path}, ready to insert: without its leading blank lines and
+     * indented the way the user's config already indents that section.
      */
-    private static int findInsertionPoint(List<String> lines, String key) {
-        // Scan backward to find the nearest preceding top-level key
-        for (int i = lines.size() - 1; i >= 0; i--) {
-            String line = lines.get(i);
-            String trimmed = line.stripLeading();
-            boolean isTopKey = !trimmed.isEmpty() && !trimmed.startsWith("#")
-                    && !trimmed.startsWith("-") && line.length() == trimmed.length()
-                    && trimmed.contains(":");
-            if (!isTopKey) continue;
+    private static List<String> reindentForUser(String path, YamlNode defaultNode, YamlTextTree userTree) {
+        List<String> block = withoutLeadingBlankLines(defaultNode.text);
+        int lastDot = path.lastIndexOf('.');
+        if (lastDot < 0) return block; // a top-level key is always at column zero
 
-            String topKey = trimmed.substring(0, trimmed.indexOf(':')).trim();
-            // Found a preceding top-level key — find the end of its section
-            if (topKey.compareTo(key) <= 0) {
-                int lastContent = i;
-                for (int j = i + 1; j < lines.size(); j++) {
-                    String l = lines.get(j).stripLeading();
-                    if (l.isEmpty()) break; // blank line = section boundary
-                    // Another top-level key = new section
-                    if (!l.startsWith("#") && !l.startsWith(" ") && !l.startsWith("\t")
-                            && lines.get(j).length() == l.length() && l.contains(":")) break;
-                    lastContent = j;
+        YamlNode parentInUser = userTree.find(path.substring(0, lastDot));
+        if (parentInUser == null) return block;
+        int userIndent = parentInUser.firstChildIndent(defaultNode.indent);
+        if (userIndent == defaultNode.indent) return block;
+
+        // 用户可能把某个节缩进成 4 个空格：新增的子键必须跟随该节的缩进，否则文件无法解析
+        // The user may indent a section differently — the added keys have to follow it, or YAML breaks.
+        List<String> shifted = new ArrayList<>(block.size());
+        for (String line : block) {
+            if (line.isBlank()) {
+                shifted.add(line);
+                continue;
+            }
+            int strip = 0;
+            while (strip < defaultNode.indent && strip < line.length() && line.charAt(strip) == ' ') {
+                strip++;
+            }
+            shifted.add(" ".repeat(userIndent) + line.substring(strip));
+        }
+        return shifted;
+    }
+
+    /**
+     * Drop the blank lines a default block starts with: the blank line above a section is a
+     * separator, and {@link #insertBlock} decides where one is needed.
+     */
+    private static List<String> withoutLeadingBlankLines(List<String> block) {
+        int start = 0;
+        while (start < block.size() && block.get(start).isBlank()) {
+            start++;
+        }
+        return block.subList(start, block.size());
+    }
+
+    /**
+     * Insert one block of default text, keeping the file readable: a new top-level key is
+     * separated from the line above it, and a blank line separates the block from a
+     * following top-level key or comment.
+     */
+    private static void insertBlock(List<String> lines, int at, List<String> block) {
+        List<String> addition = new ArrayList<>();
+        if (startsTopLevelKey(block) && at > 0 && !lines.get(at - 1).isBlank()) {
+            addition.add("");
+        }
+        addition.addAll(block);
+        if (at < lines.size() && !lines.get(at).isBlank() && !isIndented(lines.get(at))) {
+            addition.add("");
+        }
+        lines.addAll(at, addition);
+    }
+
+    /** Whether the first content line of {@code block} is an unindented (top-level) key. */
+    private static boolean startsTopLevelKey(List<String> block) {
+        for (String line : block) {
+            String trimmed = line.stripLeading();
+            if (trimmed.isEmpty() || trimmed.startsWith("#")) continue;
+            return line.length() == trimmed.length();
+        }
+        return true;
+    }
+
+    private static boolean isIndented(String line) {
+        return !line.isEmpty() && Character.isWhitespace(line.charAt(0));
+    }
+
+    /**
+     * Line at which the default block for {@code path} belongs in the user's config: right
+     * after the nearest sibling that precedes it in the default config and already exists
+     * in the user's file, or — when none does — immediately before the nearest existing
+     * sibling that follows it. That preserves the default config's own ordering.
+     *
+     * @return the line index, or -1 when the key cannot be placed without risking damage
+     */
+    private static int insertionLine(String path, YamlTextTree defaults, YamlTextTree user, int endOfFile) {
+        int lastDot = path.lastIndexOf('.');
+        String parentPath = lastDot < 0 ? "" : path.substring(0, lastDot);
+        String key = lastDot < 0 ? path : path.substring(lastDot + 1);
+
+        YamlNode parentInDefaults = defaults.find(parentPath);
+        YamlNode parentInUser = user.find(parentPath);
+        if (parentInDefaults == null || parentInUser == null) return -1;
+        // 用户用 {…} 行内写法声明的节无法安全地在下面追加缩进子键，跳过它
+        // A section the user wrote inline ({...}) cannot take indented children underneath it.
+        if (parentInUser != user.root && hasInlineValue(parentInUser.keyLine)) return -1;
+
+        List<String> siblings = new ArrayList<>(parentInDefaults.children.keySet());
+        int index = siblings.indexOf(key);
+        if (index < 0) return -1;
+
+        for (int i = index - 1; i >= 0; i--) {
+            YamlNode preceding = user.find(childPath(parentPath, siblings.get(i)));
+            if (preceding != null) return preceding.lastLine + 1;
+        }
+        for (int i = index + 1; i < siblings.size(); i++) {
+            YamlNode following = user.find(childPath(parentPath, siblings.get(i)));
+            if (following != null) return following.firstLine;
+        }
+        // 没有同级键可以依附：顶级键追加到文件末尾，子键放到所属节的末尾
+        // Nothing to anchor to: append top-level keys, extend a section at its end.
+        if (parentInUser == user.root) return endOfFile;
+        return parentInUser.lastLine + 1;
+    }
+
+    private static String childPath(String parentPath, String key) {
+        return parentPath.isEmpty() ? key : parentPath + "." + key;
+    }
+
+    /** Whether a key line carries its value on the same line instead of starting a block. */
+    private static boolean hasInlineValue(String keyLine) {
+        int colon = keyLine.indexOf(':');
+        if (colon < 0) return false;
+        String value = keyLine.substring(colon + 1).trim();
+        return !value.isEmpty() && !value.startsWith("#");
+    }
+
+    /** Strip CR so blocks can be handled uniformly; the original endings are restored later. */
+    private static String normalizeLineEndings(String text) {
+        return text.replace("\r\n", "\n").replace('\r', '\n');
+    }
+
+    /**
+     * One key of a YAML document: the comments written above it plus every line of its
+     * subtree, in document order, so the block can be copied into another file verbatim.
+     */
+    private static final class YamlNode {
+        final String path;
+        final int indent;
+        final String keyLine;
+        final List<String> text = new ArrayList<>();
+        final Map<String, YamlNode> children = new LinkedHashMap<>();
+        int firstLine = -1;
+        int lastLine = -1;
+
+        YamlNode(String path, int indent, String keyLine) {
+            this.path = path;
+            this.indent = indent;
+            this.keyLine = keyLine;
+        }
+
+        /** The indentation this node's existing children use, or {@code fallback} if it has none. */
+        int firstChildIndent(int fallback) {
+            for (YamlNode child : children.values()) {
+                return child.indent;
+            }
+            return fallback;
+        }
+    }
+
+    /** Line-oriented view of a YAML document, used to lift default blocks into a user config. */
+    private static final class YamlTextTree {
+        final YamlNode root = new YamlNode("", -1, "");
+
+        static YamlTextTree parse(String text) {
+            YamlTextTree tree = new YamlTextTree();
+            Deque<YamlNode> stack = new ArrayDeque<>();
+            stack.push(tree.root);
+            List<String> pending = new ArrayList<>();
+
+            List<String> lines = Arrays.asList(text.split("\n", -1));
+            for (int i = 0; i < lines.size(); i++) {
+                String line = lines.get(i);
+                String trimmed = line.stripLeading();
+
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                    pending.add(line);
+                    continue;
                 }
-                return lastContent + 1;
+
+                int indent = line.length() - trimmed.length();
+                int colon = trimmed.indexOf(':');
+                boolean sequenceItem = trimmed.startsWith("- ") || trimmed.equals("-");
+
+                if (colon > 0 && !sequenceItem) {
+                    while (stack.size() > 1 && stack.peek().indent >= indent) {
+                        stack.pop();
+                    }
+                    YamlNode parent = stack.peek();
+                    String key = trimmed.substring(0, colon).trim();
+                    YamlNode node = new YamlNode(childPath(parent.path, key), indent, line);
+                    node.firstLine = i - pending.size();
+                    // 这一行（连同其上方的注释）既属于新键，也属于它所在的每一个节，
+                    // 这样一个节的文本块总是完整包含它的所有子键
+                    // The line and the comments above it belong to the new key *and* to every
+                    // enclosing section, so a section's block always holds all of its keys.
+                    appendToEnclosing(stack, tree.root, pending, line);
+
+                    node.text.addAll(pending);
+                    node.text.add(line);
+                    parent.children.put(key, node);
+                    stack.push(node);
+                    mark(stack, i);
+                } else {
+                    // 值续行或列表项：属于当前块 / a value continuation or list item of the current block
+                    if (stack.peek() != tree.root && indent > stack.peek().indent) {
+                        appendToEnclosing(stack, tree.root, pending, line);
+                        mark(stack, i);
+                    }
+                }
+                pending.clear();
+            }
+            return tree;
+        }
+
+        private static void mark(Deque<YamlNode> stack, int line) {
+            for (YamlNode node : stack) {
+                if (node.lastLine < line) node.lastLine = line;
             }
         }
-        return lines.size(); // no preceding key found — append at end
+
+        /** Append a line (and the comments above it) to every enclosing section, root excluded. */
+        private static void appendToEnclosing(Deque<YamlNode> stack, YamlNode root,
+                                              List<String> pending, String line) {
+            for (YamlNode enclosing : stack) {
+                if (enclosing == root) continue;
+                enclosing.text.addAll(pending);
+                enclosing.text.add(line);
+            }
+        }
+
+        /** The block for a dotted key path, or {@code null} when this document has no such key. */
+        YamlNode find(String path) {
+            return find(root, path);
+        }
+
+        private static YamlNode find(YamlNode node, String path) {
+            if (node.path.equals(path)) return node;
+            for (YamlNode child : node.children.values()) {
+                YamlNode found = find(child, path);
+                if (found != null) return found;
+            }
+            return null;
+        }
     }
 }
